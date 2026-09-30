@@ -1,0 +1,3077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aither Kairos — Astronaut Health Monitoring System</title>
+<script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* =========================================================
+   BASE / RESET
+   ========================================================= */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg-deep:    #020810;
+  --bg-mid:     #040d1a;
+  --navy:       #061428;
+  --cyan:       #00c8ff;
+  --cyan-dim:   #0090bb;
+  --cyan-glow:  rgba(0,200,255,.18);
+  --blue:       #1565C0;
+  --blue-light: #1e88e5;
+  --orange:     #ff6d00;
+  --orange-dim: #bf5000;
+  --green:      #00e676;
+  --green-dim:  #00c060;
+  --amber:      #ffc107;
+  --red:        #ff3d3d;
+  --text-prim:  #e8f4fd;
+  --text-sec:   #8bb8d0;
+  --text-dim:   #4a6a80;
+  --glass-bg:   rgba(4,18,38,.72);
+  --glass-bdr:  rgba(0,200,255,.18);
+  --glass-glow: 0 0 24px rgba(0,200,255,.08);
+  --panel-r:    14px;
+  --font-mono:  'Courier New', Courier, monospace;
+  --font-brand: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
+  --sidebar-w:  260px;
+  --sidebar-coll: 64px;
+  --hdr-h:      56px;
+}
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg-deep);
+  color: var(--text-prim);
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+/* =========================================================
+   3D CANVAS BACKGROUND
+   ========================================================= */
+#space-canvas {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 0; pointer-events: none;
+}
+#canvas-overlay {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: linear-gradient(180deg,
+    rgba(2,8,16,.55) 0%,
+    rgba(2,8,16,.38) 40%,
+    rgba(2,8,16,.62) 100%);
+  z-index: 1; pointer-events: none;
+}
+.static-bg-fallback {
+  position: fixed; top: 0; left: 0;
+  width: 100%; height: 100%;
+  background: radial-gradient(ellipse at 70% 30%,
+    #0a1f3d 0%, #020810 60%);
+  z-index: 0;
+}
+
+/* =========================================================
+   LAYOUT SHELL
+   ========================================================= */
+#app {
+  position: relative; z-index: 2;
+  display: flex; min-height: 100vh;
+}
+
+/* =========================================================
+   SIDEBAR
+   ========================================================= */
+#sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: rgba(2,10,22,.88);
+  border-right: 1px solid var(--glass-bdr);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  display: flex; flex-direction: column;
+  position: fixed; left: 0; top: 0; bottom: 0;
+  z-index: 100;
+  transition: width .3s cubic-bezier(.4,0,.2,1);
+  overflow: hidden;
+}
+#sidebar.collapsed { width: var(--sidebar-coll); }
+#sidebar .sb-logo {
+  display: flex; align-items: center; gap: 10px;
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid rgba(0,200,255,.1);
+  min-height: var(--hdr-h);
+}
+.sb-logo .logo-icon {
+  width: 34px; height: 34px; flex-shrink: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #0a3060, #0070b8);
+  border: 1px solid var(--cyan-dim);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.sb-logo .logo-text {
+  display: flex; flex-direction: column;
+  opacity: 1; transition: opacity .2s;
+}
+#sidebar.collapsed .logo-text { opacity: 0; pointer-events: none; }
+.logo-text .logo-title {
+  font-family: var(--font-brand);
+  font-size: 12px; font-weight: 800; letter-spacing: .13em;
+  color: var(--cyan); text-transform: uppercase;
+}
+.logo-text .logo-sub {
+  font-size: 9px; color: var(--text-dim); letter-spacing: .08em; margin-top: 1px;
+}
+
+#sb-toggle {
+  position: absolute; top: 16px; right: -14px;
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--navy); border: 1px solid var(--glass-bdr);
+  color: var(--cyan); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; z-index: 110;
+  transition: background .2s;
+}
+#sb-toggle:hover { background: rgba(0,200,255,.15); }
+
+.sb-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0; }
+.sb-nav::-webkit-scrollbar { width: 3px; }
+.sb-nav::-webkit-scrollbar-thumb { background: rgba(0,200,255,.2); border-radius: 2px; }
+
+.nav-section-label {
+  font-size: 9px; letter-spacing: .14em; color: var(--text-dim);
+  text-transform: uppercase; padding: 12px 18px 4px;
+  white-space: nowrap; overflow: hidden;
+  opacity: 1; transition: opacity .2s;
+}
+#sidebar.collapsed .nav-section-label { opacity: 0; }
+
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px; cursor: pointer;
+  color: var(--text-sec); font-size: 13px; font-weight: 500;
+  border-left: 2px solid transparent;
+  transition: all .2s; white-space: nowrap;
+  user-select: none; position: relative;
+}
+.nav-item:hover { color: var(--text-prim); background: rgba(0,200,255,.06); }
+.nav-item.active {
+  color: var(--cyan); border-left-color: var(--cyan);
+  background: rgba(0,200,255,.1);
+}
+.nav-item .nav-icon {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 17px;
+  filter: drop-shadow(0 0 4px rgba(0,200,255,.18));
+}
+.nav-item .nav-label { overflow: hidden; transition: opacity .2s; }
+#sidebar.collapsed .nav-label { opacity: 0; }
+.nav-badge {
+  font-size: 8px; letter-spacing: .08em; padding: 2px 6px;
+  border-radius: 10px; background: rgba(0,200,255,.15);
+  color: var(--cyan-dim); border: 1px solid rgba(0,200,255,.2);
+  margin-left: auto; white-space: nowrap;
+}
+.nav-badge.soon { background: rgba(255,109,0,.12); color: var(--orange-dim); border-color: rgba(255,109,0,.2); }
+
+.sb-footer {
+  border-top: 1px solid rgba(0,200,255,.1);
+  padding: 14px 16px; font-size: 10px;
+  color: var(--text-dim); overflow: hidden;
+}
+.sb-footer .sb-crew-name { font-size: 12px; font-weight: 600; color: var(--text-prim); margin-bottom: 8px; }
+.sb-footer .sb-info-row { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.sb-footer .sb-info-row span:last-child { color: var(--text-sec); }
+.sb-footer .sb-status-dots { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
+.sb-status-dot {
+  display: flex; align-items: center; gap: 8px; font-size: 10px;
+  white-space: nowrap;
+}
+.dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  animation: pulse-dot 2.8s ease-in-out infinite;
+}
+.dot.green  { background: var(--green);  box-shadow: 0 0 6px var(--green); }
+.dot.amber  { background: var(--amber);  box-shadow: 0 0 6px var(--amber); animation-delay: .5s; }
+.dot.blue   { background: var(--cyan);   box-shadow: 0 0 6px var(--cyan);  animation-delay: 1s; }
+@keyframes pulse-dot {
+  0%,100% { opacity: 1; } 50% { opacity: .45; }
+}
+#sidebar.collapsed .sb-footer { padding: 14px 10px; }
+#sidebar.collapsed .sb-footer-inner { opacity: 0; pointer-events: none; }
+
+/* =========================================================
+   MAIN CONTENT
+   ========================================================= */
+#main {
+  margin-left: var(--sidebar-w);
+  transition: margin-left .3s cubic-bezier(.4,0,.2,1);
+  flex: 1; min-width: 0;
+}
+#sidebar.collapsed ~ #main { margin-left: var(--sidebar-coll); }
+
+/* =========================================================
+   TOP BAR
+   ========================================================= */
+#topbar {
+  position: sticky; top: 0; z-index: 90;
+  height: var(--hdr-h);
+  background: rgba(2,8,16,.82);
+  border-bottom: 1px solid var(--glass-bdr);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  display: flex; align-items: center; gap: 16px;
+  padding: 0 24px;
+}
+.topbar-title { font-family: var(--font-brand); font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-prim); }
+.topbar-sep { width: 1px; height: 20px; background: var(--glass-bdr); }
+.topbar-sub  { font-size: 11px; color: var(--text-dim); letter-spacing: .06em; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+.tb-badge {
+  font-size: 10px; padding: 3px 10px; border-radius: 20px;
+  letter-spacing: .08em; font-weight: 600; text-transform: uppercase;
+}
+.tb-badge.live { background: rgba(0,230,118,.15); color: var(--green); border: 1px solid rgba(0,230,118,.3); }
+.tb-badge.sim  { background: rgba(255,193,7,.12); color: var(--amber); border: 1px solid rgba(255,193,7,.25); font-size: 9px; }
+.tb-mission-day { font-size: 11px; color: var(--text-sec); font-variant-numeric: tabular-nums; }
+.tb-time { font-family: var(--font-mono); font-size: 12px; color: var(--cyan); letter-spacing: .05em; }
+
+/* =========================================================
+   PAGE CONTAINER
+   ========================================================= */
+.page { display: none; padding: 24px; }
+.page.active { display: block; }
+
+/* =========================================================
+   HERO SECTION
+   ========================================================= */
+#hero {
+  position: relative;
+  min-height: 340px;
+  border-radius: var(--panel-r);
+  overflow: hidden;
+  margin-bottom: 28px;
+  background: linear-gradient(135deg,
+    rgba(4,12,28,.95) 0%,
+    rgba(6,20,50,.9) 50%,
+    rgba(4,12,28,.95) 100%);
+  border: 1px solid var(--glass-bdr);
+}
+#hero-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: .75;
+}
+.hero-content {
+  position: relative; z-index: 2;
+  padding: 48px 56px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 32px;
+}
+.hero-left { max-width: 560px; }
+.hero-eyebrow {
+  font-size: 10px; letter-spacing: .22em; color: var(--cyan);
+  text-transform: uppercase; margin-bottom: 12px; font-weight: 600;
+  display: flex; align-items: center; gap: 8px;
+}
+.hero-eyebrow::before {
+  content: ''; display: block; width: 24px; height: 1px; background: var(--cyan);
+}
+.hero-title {
+  font-size: 38px; font-weight: 800; letter-spacing: -.01em; line-height: 1.1;
+  background: linear-gradient(135deg, #fff 20%, var(--cyan) 80%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  background-clip: text; margin-bottom: 12px;
+}
+.hero-subtitle {
+  font-size: 13px; color: var(--text-sec); letter-spacing: .08em;
+  text-transform: uppercase; font-weight: 500;
+}
+.hero-right {
+  background: rgba(0,200,255,.07);
+  border: 1px solid var(--glass-bdr);
+  border-radius: 12px;
+  padding: 24px 28px;
+  backdrop-filter: blur(10px);
+  min-width: 240px;
+}
+.hero-stat { margin-bottom: 14px; }
+.hero-stat:last-child { margin-bottom: 0; }
+.hero-stat-label {
+  font-size: 9px; letter-spacing: .18em; color: var(--text-dim);
+  text-transform: uppercase; margin-bottom: 3px;
+}
+.hero-stat-value {
+  font-size: 18px; font-weight: 700; color: var(--text-prim);
+  font-variant-numeric: tabular-nums;
+}
+.hero-stat-value.cyan { color: var(--cyan); }
+.hero-stat-value.green { color: var(--green); }
+
+/* =========================================================
+   GLASS CARD
+   ========================================================= */
+.glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-bdr);
+  border-radius: var(--panel-r);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--glass-glow);
+  padding: 20px 22px;
+}
+.glass-card.pad-lg { padding: 26px 28px; }
+
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--text-sec);
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title .ct-icon { font-size: 14px; }
+
+/* =========================================================
+   STATUS CARDS GRID
+   ========================================================= */
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px; margin-bottom: 28px;
+}
+.status-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-bdr);
+  border-radius: var(--panel-r);
+  padding: 20px 22px;
+  position: relative; overflow: hidden;
+  transition: border-color .25s, box-shadow .25s;
+  cursor: default;
+}
+.status-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+}
+.status-card.warn::before { background: linear-gradient(90deg, transparent, var(--amber), transparent); }
+.status-card.crit::before { background: linear-gradient(90deg, transparent, var(--red), transparent); }
+.status-card:hover { border-color: var(--cyan-dim); box-shadow: 0 0 30px rgba(0,200,255,.1); }
+
+.sc-label { font-size: 9px; letter-spacing: .18em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
+.sc-value { font-size: 34px; font-weight: 800; color: var(--text-prim); line-height: 1; margin-bottom: 4px; font-variant-numeric: tabular-nums; }
+.sc-unit  { font-size: 14px; font-weight: 400; color: var(--text-sec); }
+.sc-sub   { font-size: 11px; color: var(--text-sec); display: flex; align-items: center; gap: 6px; margin-top: 10px; }
+.sc-trend { font-size: 11px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.sc-trend.up   { color: var(--amber); }
+.sc-trend.down { color: var(--cyan); }
+.sc-trend.norm { color: var(--green); }
+.sc-status { font-size: 10px; font-weight: 600; letter-spacing: .1em; padding: 3px 8px; border-radius: 6px; margin-top: 12px; display: inline-block; }
+.sc-status.normal  { background: rgba(0,230,118,.12); color: var(--green); border: 1px solid rgba(0,230,118,.25); }
+.sc-status.monitor { background: rgba(255,193,7,.12); color: var(--amber); border: 1px solid rgba(255,193,7,.25); }
+.sc-status.review  { background: rgba(255,61,61,.12);  color: var(--red);   border: 1px solid rgba(255,61,61,.25); }
+.sc-status.active  { background: rgba(0,200,255,.1);  color: var(--cyan);  border: 1px solid rgba(0,200,255,.2); }
+
+/* =========================================================
+   TELEMETRY SECTION
+   ========================================================= */
+.section-title {
+  font-size: 11px; font-weight: 700; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--text-sec);
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 18px;
+}
+.section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--glass-bdr), transparent);
+}
+
+.chart-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-bdr);
+  border-radius: var(--panel-r);
+  padding: 20px 22px; margin-bottom: 18px;
+  overflow: hidden;
+}
+.chart-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
+}
+.chart-title-block { display: flex; flex-direction: column; gap: 4px; }
+.chart-name {
+  font-size: 12px; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--text-prim);
+  display: flex; align-items: center; gap: 8px;
+}
+.chart-current-val { font-size: 28px; font-weight: 800; color: var(--text-prim); font-variant-numeric: tabular-nums; }
+.chart-current-val .cv-unit { font-size: 14px; font-weight: 400; color: var(--text-sec); }
+.chart-meta { display: flex; gap: 20px; flex-wrap: wrap; }
+.cm-item { display: flex; flex-direction: column; gap: 2px; }
+.cm-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); }
+.cm-value { font-size: 13px; font-weight: 600; color: var(--text-sec); }
+.cm-value.baseline { color: var(--cyan); }
+.cm-value.dev-pos  { color: var(--amber); }
+.cm-value.dev-neg  { color: var(--blue-light); }
+.cm-value.dev-norm { color: var(--green); }
+
+.time-range-btns {
+  display: flex; gap: 4px; flex-wrap: wrap;
+}
+.trb {
+  font-size: 10px; font-weight: 600; letter-spacing: .08em;
+  padding: 4px 10px; border-radius: 6px; cursor: pointer;
+  border: 1px solid rgba(0,200,255,.2);
+  background: transparent; color: var(--text-dim);
+  transition: all .2s;
+}
+.trb:hover { color: var(--cyan); border-color: rgba(0,200,255,.4); }
+.trb.active { background: rgba(0,200,255,.15); color: var(--cyan); border-color: var(--cyan-dim); }
+
+.baseline-bar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 8px;
+  background: rgba(0,200,255,.05);
+  border: 1px solid rgba(0,200,255,.12);
+  font-size: 11px; margin-top: 10px;
+}
+.bl-indicator { width: 3px; height: 16px; border-radius: 2px; background: var(--cyan); }
+.bl-text { color: var(--text-sec); }
+.bl-text strong { color: var(--cyan); }
+.bl-status { margin-left: auto; font-size: 10px; font-weight: 600; }
+.bl-status.within { color: var(--green); }
+.bl-status.above  { color: var(--amber); }
+.bl-status.below  { color: var(--blue-light); }
+
+.live-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 9px; font-weight: 700; letter-spacing: .12em;
+  color: var(--green); text-transform: uppercase;
+}
+.live-badge::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--green); box-shadow: 0 0 8px var(--green);
+  animation: pulse-live 1.4s ease-in-out infinite;
+}
+@keyframes pulse-live { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
+
+.periodic-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 9px; font-weight: 700; letter-spacing: .12em;
+  color: var(--amber); text-transform: uppercase;
+}
+.periodic-badge::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--amber); box-shadow: 0 0 8px var(--amber);
+}
+
+.chart-wrap { position: relative; }
+.chart-wrap canvas { max-height: 180px; }
+
+/* =========================================================
+   ECG PANEL
+   ========================================================= */
+#ecg-monitor {
+  background: #010d18;
+  border: 1px solid rgba(0,200,255,.2);
+  border-radius: var(--panel-r);
+  padding: 20px 22px; margin-bottom: 18px;
+  position: relative; overflow: hidden;
+}
+.ecg-grid-bg {
+  position: absolute; inset: 0; opacity: .12;
+  background-image:
+    linear-gradient(rgba(0,200,255,.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,200,255,.5) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+.ecg-header {
+  position: relative; z-index: 1;
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.ecg-title { font-size: 12px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+.ecg-hr-display {
+  font-size: 28px; font-weight: 800; font-family: var(--font-mono);
+  color: var(--cyan); font-variant-numeric: tabular-nums;
+}
+.ecg-hr-display .ecg-hr-unit { font-size: 13px; font-weight: 400; color: var(--text-dim); }
+.ecg-stats { display: flex; gap: 20px; }
+.ecg-stat { text-align: center; }
+.ecg-stat-label { font-size: 9px; letter-spacing: .12em; color: var(--text-dim); text-transform: uppercase; }
+.ecg-stat-value { font-size: 14px; font-weight: 700; color: var(--text-sec); font-family: var(--font-mono); }
+.ecg-controls {
+  margin-left: auto; display: flex; gap: 8px;
+}
+.ecg-btn {
+  font-size: 10px; font-weight: 600; letter-spacing: .08em;
+  padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid rgba(0,200,255,.25);
+  background: rgba(0,200,255,.08); color: var(--text-sec);
+  transition: all .2s;
+}
+.ecg-btn:hover { color: var(--cyan); border-color: var(--cyan-dim); }
+.ecg-btn.active { background: rgba(0,200,255,.2); color: var(--cyan); }
+#ecg-canvas { position: relative; z-index: 1; width: 100%; height: 130px; }
+
+/* =========================================================
+   SMALL PARAM CARDS
+   ========================================================= */
+.param-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px; margin-bottom: 28px;
+}
+.param-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-bdr);
+  border-radius: 10px; padding: 16px 18px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.param-card:hover { border-color: var(--cyan-dim); box-shadow: 0 0 20px rgba(0,200,255,.08); }
+.pc-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.pc-name { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-dim); font-weight: 600; }
+.pc-value { font-size: 24px; font-weight: 800; color: var(--text-prim); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.pc-unit  { font-size: 12px; font-weight: 400; color: var(--text-sec); }
+.pc-baseline { font-size: 10px; color: var(--text-dim); }
+.pc-baseline span { color: var(--cyan); }
+.pc-sparkline { height: 32px; margin-top: 8px; }
+.pc-sparkline canvas { width: 100% !important; height: 32px !important; }
+
+/* =========================================================
+   ALERTS PANEL
+   ========================================================= */
+.alerts-list { display: flex; flex-direction: column; gap: 10px; }
+.alert-item {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 16px; border-radius: 10px;
+  background: rgba(4,14,28,.7);
+  border: 1px solid rgba(0,200,255,.12);
+  transition: border-color .2s;
+}
+.alert-item:hover { border-color: rgba(0,200,255,.25); }
+.alert-icon {
+  width: 36px; height: 36px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 8px; font-weight:800; letter-spacing:.04em; flex-shrink: 0;
+}
+.alert-icon.info    { background: rgba(0,200,255,.12); }
+.alert-icon.monitor { background: rgba(255,193,7,.12); }
+.alert-icon.review  { background: rgba(255,61,61,.12); }
+.alert-body { flex: 1; min-width: 0; }
+.alert-level {
+  font-size: 9px; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.alert-level.info    { color: var(--cyan); }
+.alert-level.monitor { color: var(--amber); }
+.alert-level.review  { color: var(--red); }
+.alert-msg { font-size: 13px; color: var(--text-prim); margin-bottom: 4px; }
+.alert-detail { font-size: 11px; color: var(--text-dim); }
+.alert-time { font-size: 10px; color: var(--text-dim); font-family: var(--font-mono); margin-left: auto; }
+.alert-view-btn {
+  font-size: 10px; font-weight: 600; letter-spacing: .08em;
+  padding: 4px 10px; border-radius: 5px; cursor: pointer;
+  border: 1px solid rgba(0,200,255,.2); background: rgba(0,200,255,.08);
+  color: var(--cyan); transition: all .2s; margin-top: 6px; display: inline-block;
+}
+.alert-view-btn:hover { background: rgba(0,200,255,.18); }
+
+/* =========================================================
+   TIMELINE
+   ========================================================= */
+.timeline-wrap {
+  overflow-x: auto; padding-bottom: 12px;
+}
+.timeline-wrap::-webkit-scrollbar { height: 4px; }
+.timeline-wrap::-webkit-scrollbar-thumb { background: rgba(0,200,255,.2); border-radius: 2px; }
+.timeline-track {
+  display: flex; align-items: center; gap: 0;
+  min-width: 900px; position: relative;
+  padding: 20px 0;
+}
+.timeline-line {
+  position: absolute; top: 50%; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
+  transform: translateY(-50%);
+}
+.tl-point {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  flex: 1; cursor: pointer; z-index: 1;
+  transition: transform .2s;
+}
+.tl-point:hover { transform: translateY(-3px); }
+.tl-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--navy); border: 2px solid var(--cyan-dim);
+  transition: all .2s;
+}
+.tl-point.active .tl-dot,
+.tl-point:hover .tl-dot {
+  background: var(--cyan); border-color: var(--cyan);
+  box-shadow: 0 0 12px var(--cyan);
+}
+.tl-point.current .tl-dot { background: var(--green); border-color: var(--green); box-shadow: 0 0 12px var(--green); }
+.tl-label { font-size: 9px; color: var(--text-dim); letter-spacing: .08em; text-align: center; white-space: nowrap; }
+.tl-point.active .tl-label, .tl-point:hover .tl-label { color: var(--cyan); }
+.tl-point.current .tl-label { color: var(--green); }
+.tl-icons { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; }
+.tl-icon { font-size: 9px; }
+
+/* =========================================================
+   3D BODY VISUALIZATION
+   ========================================================= */
+#body-viz-wrap {
+  position: relative; overflow: hidden;
+  border-radius: var(--panel-r);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-bdr);
+  min-height: 380px; padding: 20px;
+  display: flex; align-items: center; gap: 32px; flex-wrap: wrap;
+}
+#body-canvas { width: 200px; height: 340px; flex-shrink: 0; }
+.body-systems { display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.body-sys-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 16px; border-radius: 10px;
+  background: rgba(0,200,255,.05);
+  border: 1px solid rgba(0,200,255,.12);
+  cursor: pointer; transition: all .2s;
+}
+.body-sys-card:hover { background: rgba(0,200,255,.1); border-color: rgba(0,200,255,.3); }
+.body-sys-card.future { opacity: .55; cursor: default; }
+.body-sys-card.future:hover { background: rgba(0,200,255,.05); border-color: rgba(0,200,255,.12); }
+.body-sys-icon { width: 34px; height: 34px; display:flex; align-items:center; justify-content:center; color:var(--cyan); border:1px solid rgba(0,200,255,.22); border-radius:8px; font-size:8px; font-weight:800; letter-spacing:.04em; }
+.body-sys-info { flex: 1; }
+.body-sys-name { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-prim); }
+.body-sys-status { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+.body-sys-badge { font-size: 9px; padding: 2px 8px; border-radius: 10px; font-weight: 600; letter-spacing: .08em; }
+.body-sys-badge.ok     { background: rgba(0,230,118,.12); color: var(--green); }
+.body-sys-badge.mon    { background: rgba(255,193,7,.12);  color: var(--amber); }
+.body-sys-badge.future { background: rgba(255,109,0,.1); color: var(--orange-dim); }
+
+/* =========================================================
+   ARCHITECTURE DIAGRAM
+   ========================================================= */
+.arch-flow {
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  padding: 20px 0;
+}
+.arch-node {
+  background: rgba(0,200,255,.08);
+  border: 1px solid var(--glass-bdr);
+  border-radius: 10px; padding: 12px 24px;
+  font-size: 12px; font-weight: 700; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--text-prim);
+  text-align: center; min-width: 220px;
+  transition: all .25s;
+}
+.arch-node:hover { background: rgba(0,200,255,.14); border-color: var(--cyan-dim); }
+.arch-node.highlight { border-color: var(--cyan); color: var(--cyan); }
+.arch-node.secondary { font-size: 10px; min-width: 160px; padding: 8px 16px; color: var(--text-sec); }
+.arch-node-row { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
+.arch-arrow {
+  display: flex; flex-direction: column; align-items: center;
+  padding: 4px 0;
+}
+.arch-arrow-line { width: 1px; height: 24px; background: var(--cyan-dim); }
+.arch-arrow-head { font-size: 12px; color: var(--cyan-dim); margin-top: -4px; }
+.arch-particle {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--cyan); box-shadow: 0 0 6px var(--cyan);
+  animation: flow-down 2s linear infinite;
+}
+@keyframes flow-down {
+  0%   { transform: translateY(0); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(28px); opacity: 0; }
+}
+
+/* =========================================================
+   COGNITIVE PAGE
+   ========================================================= */
+.cog-domain-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px; margin-bottom: 24px;
+}
+.cog-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-bdr);
+  border-radius: var(--panel-r); padding: 20px 22px;
+}
+.cog-card-name { font-size: 11px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-sec); font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+.cog-score { font-size: 44px; font-weight: 800; color: var(--text-prim); line-height: 1; margin-bottom: 4px; }
+.cog-pct { font-size: 18px; font-weight: 400; color: var(--text-sec); }
+.cog-bar-wrap { height: 6px; background: rgba(0,200,255,.1); border-radius: 3px; margin: 10px 0; overflow: hidden; }
+.cog-bar { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--cyan), var(--blue-light)); transition: width .8s ease; }
+.cog-baseline { font-size: 10px; color: var(--text-dim); }
+.cog-baseline span { color: var(--cyan); }
+.cog-status-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+
+/* =========================================================
+   MISSION CONTEXT
+   ========================================================= */
+.mission-ctx-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 14px;
+}
+.mctx-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-bdr);
+  border-radius: 10px; padding: 16px 18px;
+}
+.mctx-icon { width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:800; letter-spacing:.04em; color:var(--cyan); border:1px solid rgba(0,200,255,.18); border-radius:7px; margin-bottom:8px; }
+.mctx-label { font-size: 9px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-dim); margin-bottom: 4px; }
+.mctx-value { font-size: 18px; font-weight: 700; color: var(--text-prim); }
+.mctx-sub   { font-size: 11px; color: var(--text-sec); margin-top: 3px; }
+
+/* =========================================================
+   COMING SOON MODULE
+   ========================================================= */
+.coming-soon-hero {
+  border-radius: var(--panel-r);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-bdr);
+  padding: 60px 40px; text-align: center;
+  margin-bottom: 24px; position: relative; overflow: hidden;
+}
+.cs-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10px; letter-spacing: .18em; font-weight: 700;
+  color: var(--orange-dim); text-transform: uppercase;
+  background: rgba(255,109,0,.1);
+  border: 1px solid rgba(255,109,0,.25);
+  border-radius: 20px; padding: 4px 14px; margin-bottom: 16px;
+}
+.cs-title { font-size: 32px; font-weight: 800; color: var(--text-prim); margin-bottom: 10px; }
+.cs-sub   { font-size: 14px; color: var(--text-sec); max-width: 500px; margin: 0 auto; }
+.cs-grid  { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; margin-top: 28px; }
+.cs-item  {
+  border-radius: 10px; padding: 20px;
+  background: rgba(255,109,0,.05);
+  border: 1px solid rgba(255,109,0,.12);
+  text-align: left;
+}
+.cs-item-title { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--orange-dim); margin-bottom: 6px; }
+.cs-item-desc  { font-size: 11px; color: var(--text-dim); }
+.cs-disabled-chart {
+  background: rgba(4,14,28,.5);
+  border: 1px dashed rgba(255,109,0,.2);
+  border-radius: 10px; height: 120px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; color: rgba(255,109,0,.5); letter-spacing: .12em; text-transform: uppercase;
+}
+
+/* =========================================================
+   AI ANALYSIS PAGE
+   ========================================================= */
+.ai-workflow {
+  display: flex; align-items: center; gap: 0; flex-wrap: wrap;
+  justify-content: center; margin-bottom: 28px;
+}
+.ai-step {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 16px 18px; border-radius: 10px;
+  background: var(--glass-bg); border: 1px solid var(--glass-bdr);
+  min-width: 110px; text-align: center;
+  transition: all .2s;
+}
+.ai-step:hover { border-color: var(--cyan-dim); }
+.ai-step.active { border-color: var(--cyan); background: rgba(0,200,255,.1); }
+.ai-step-num { font-size: 10px; color: var(--text-dim); font-family: var(--font-mono); }
+.ai-step-name { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-prim); }
+.ai-step-icon { font-size: 22px; }
+.ai-arrow { font-size: 16px; color: var(--cyan-dim); padding: 0 4px; }
+.ai-result-card {
+  background: rgba(0,200,255,.06);
+  border: 1px solid rgba(0,200,255,.25);
+  border-radius: var(--panel-r); padding: 24px 28px; margin-bottom: 18px;
+}
+.ai-finding { font-size: 22px; font-weight: 800; color: var(--text-prim); margin-bottom: 8px; }
+.ai-finding.change { color: var(--amber); }
+.ai-finding.normal { color: var(--green); }
+.ai-disclaimer {
+  font-size: 11px; color: var(--text-dim);
+  background: rgba(255,109,0,.06); border: 1px solid rgba(255,109,0,.15);
+  border-radius: 8px; padding: 10px 14px; margin-top: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* =========================================================
+   REPORTS PAGE
+   ========================================================= */
+.report-item {
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 18px; border-radius: 10px;
+  background: var(--glass-bg); border: 1px solid var(--glass-bdr);
+  margin-bottom: 10px; cursor: pointer;
+  transition: border-color .2s, background .2s;
+}
+.report-item:hover { border-color: var(--cyan-dim); background: rgba(0,200,255,.06); }
+.report-icon { width: 42px; height: 32px; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:800; letter-spacing:.05em; color:var(--cyan); border:1px solid rgba(0,200,255,.18); border-radius:7px; text-align:center; }
+.report-info { flex: 1; }
+.report-name { font-size: 13px; font-weight: 700; color: var(--text-prim); }
+.report-date { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+.report-badge { font-size: 9px; padding: 3px 8px; border-radius: 6px; font-weight: 700; letter-spacing: .1em; }
+.report-badge.new { background: rgba(0,200,255,.15); color: var(--cyan); }
+.report-badge.gen { background: rgba(0,230,118,.12); color: var(--green); }
+
+/* =========================================================
+   TOOLTIP
+   ========================================================= */
+.tooltip {
+  position: fixed; z-index: 999;
+  background: rgba(2,10,28,.95);
+  border: 1px solid var(--glass-bdr);
+  border-radius: 8px; padding: 8px 12px;
+  font-size: 11px; color: var(--text-prim);
+  pointer-events: none; display: none;
+  backdrop-filter: blur(8px);
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+@media (max-width: 768px) {
+  :root { --sidebar-w: var(--sidebar-coll); }
+  #sidebar { width: var(--sidebar-coll); }
+  #sidebar .logo-text,
+  #sidebar .nav-label,
+  #sidebar .nav-section-label { opacity: 0; pointer-events: none; }
+  #sb-toggle { display: none; }
+  .hero-content { padding: 28px 20px; }
+  .hero-title { font-size: 26px; }
+  .chart-header { flex-direction: column; }
+}
+
+/* =========================================================
+   ULTRASOUND PAGE
+   ========================================================= */
+.ultra-comparison {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  margin-bottom: 18px;
+}
+.ultra-frame {
+  background: #010d18; border-radius: 10px;
+  border: 1px solid rgba(0,200,255,.18);
+  aspect-ratio: 4/3; overflow: hidden; position: relative;
+}
+.ultra-frame-label {
+  position: absolute; top: 8px; left: 10px;
+  font-size: 9px; letter-spacing: .14em; font-weight: 700;
+  text-transform: uppercase; color: var(--cyan);
+  background: rgba(0,0,0,.6); padding: 2px 8px; border-radius: 4px;
+}
+.ultra-canvas { width: 100%; height: 100%; }
+
+/* =========================================================
+   PAGE-SPECIFIC SCROLLBAR
+   ========================================================= */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,200,255,.2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(0,200,255,.35); }
+
+/* Utility */
+.row { display: flex; gap: 16px; flex-wrap: wrap; }
+.col-6 { flex: 0 0 calc(50% - 8px); min-width: 260px; }
+.mt-0  { margin-top: 0; }
+.mb-0  { margin-bottom: 0; }
+.mb-4  { margin-bottom: 16px; }
+.mb-6  { margin-bottom: 24px; }
+.text-cyan  { color: var(--cyan); }
+.text-green { color: var(--green); }
+.text-amber { color: var(--amber); }
+.text-dim   { color: var(--text-dim); }
+.font-mono  { font-family: var(--font-mono); }
+.text-xs    { font-size: 11px; }
+.text-sm    { font-size: 13px; }
+.shimmer {
+  background: linear-gradient(90deg,
+    rgba(0,200,255,.03) 0%,
+    rgba(0,200,255,.09) 50%,
+    rgba(0,200,255,.03) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2.4s ease infinite;
+}
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+</style>
+</head>
+<body>
+
+<!-- ==================== 3D SPACE BACKGROUND ==================== -->
+<canvas id="space-canvas"></canvas>
+<div id="canvas-overlay"></div>
+<div class="tooltip" id="tooltip"></div>
+
+<!-- ==================== APP SHELL ==================== -->
+<div id="app">
+
+  <!-- ========== SIDEBAR ========== -->
+  <nav id="sidebar">
+    <div class="sb-logo">
+      <div class="logo-icon" aria-label="Aither Kairos astronaut mission">🧑‍🚀</div>
+      <div class="logo-text">
+        <span class="logo-title">Aither Kairos</span>
+        <span class="logo-sub">Health Monitor</span>
+      </div>
+    </div>
+    <button id="sb-toggle" onclick="toggleSidebar()" title="Toggle Sidebar">◀</button>
+
+    <div class="sb-nav">
+      <div class="nav-section-label">MISSION</div>
+      <div class="nav-item active" onclick="navigate('overview')">
+        <div class="nav-icon">🛰️</div><span class="nav-label">Mission Overview</span>
+      </div>
+      <div class="nav-item" onclick="navigate('mission-context')">
+        <div class="nav-icon">🌍</div><span class="nav-label">Mission Context</span>
+      </div>
+
+      <div class="nav-section-label">HEALTH SYSTEMS</div>
+      <div class="nav-item" onclick="navigate('cardiovascular')">
+        <div class="nav-icon">🫀</div><span class="nav-label">Cardiovascular</span>
+      </div>
+      <div class="nav-item" onclick="navigate('ecg-ai')">
+        <div class="nav-icon">🤖</div><span class="nav-label">ECG AI Analysis</span>
+      </div>
+      <div class="nav-item" onclick="navigate('blood-oxygen')">
+        <div class="nav-icon">🫁</div><span class="nav-label">Blood &amp; Oxygen</span>
+      </div>
+      <div class="nav-item" onclick="navigate('ultrasound')">
+        <div class="nav-icon">📡</div><span class="nav-label">Ultrasound / IJV</span>
+      </div>
+      <div class="nav-item" onclick="navigate('cognitive')">
+        <div class="nav-icon">🧠</div><span class="nav-label">Cognitive Monitoring</span>
+      </div>
+
+      <div class="nav-section-label">FUTURE MODULES</div>
+      <div class="nav-item" onclick="navigate('immune')">
+        <div class="nav-icon">🧬</div>
+        <span class="nav-label">Immune Health</span>
+        <span class="nav-badge soon">SOON</span>
+      </div>
+      <div class="nav-item" onclick="navigate('bone')">
+        <div class="nav-icon">🦴</div>
+        <span class="nav-label">Bone Health</span>
+        <span class="nav-badge soon">SOON</span>
+      </div>
+
+      <div class="nav-section-label">DATA</div>
+      <div class="nav-item" onclick="navigate('reports')">
+        <div class="nav-icon">📋</div><span class="nav-label">Reports</span>
+      </div>
+    </div>
+
+    <div class="sb-footer">
+      <div class="sb-footer-inner">
+        <div class="sb-crew-name">👨‍🚀 Astronaut 01</div>
+        <div class="sb-info-row"><span>Mission</span><span>Long-Duration</span></div>
+        <div class="sb-info-row"><span>Mission Day</span><span class="text-cyan">Day 147</span></div>
+        <div class="sb-info-row"><span>System</span><span class="text-green">Online</span></div>
+        <div class="sb-status-dots">
+          <div class="sb-status-dot"><span class="dot green"></span> Sensor Connection</div>
+          <div class="sb-status-dot"><span class="dot green"></span> AI Engine</div>
+          <div class="sb-status-dot"><span class="dot blue"></span> Data Pipeline</div>
+          <div class="sb-status-dot"><span class="dot amber"></span> Ground Comm</div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ========== MAIN AREA ========== -->
+  <div id="main">
+
+    <!-- TOP BAR -->
+    <div id="topbar">
+      <div class="topbar-title">Aither Kairos</div>
+      <div class="topbar-sep"></div>
+      <div class="topbar-sub" id="page-breadcrumb">Astronaut Health Monitor · Mission Overview</div>
+      <div class="topbar-right">
+        <span class="tb-badge sim">🛰️ Simulated Data</span>
+        <span class="tb-badge live">● Live</span>
+        <span class="tb-mission-day">Mission Day 147</span>
+        <span class="tb-time" id="mission-clock">--:--:-- UTC</span>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: MISSION OVERVIEW ==================== -->
+    <div class="page active" id="page-overview">
+      <div style="padding:0;">
+
+        <!-- HERO -->
+        <div id="hero">
+          <canvas id="hero-canvas"></canvas>
+          <div class="hero-content">
+            <div class="hero-left">
+              <div class="hero-eyebrow">Astronaut Health Monitoring System</div>
+              <div class="hero-title">Aither<br>Kairos</div>
+              <div class="hero-subtitle">Spaceflight-Aware Continuous Health Monitoring</div>
+            </div>
+            <div class="hero-right">
+              <div class="hero-stat">
+                <div class="hero-stat-label">Mission Day</div>
+                <div class="hero-stat-value cyan">Day 147</div>
+              </div>
+              <div class="hero-stat">
+                <div class="hero-stat-label">Crew Member</div>
+                <div class="hero-stat-value">Astronaut 01</div>
+              </div>
+              <div class="hero-stat">
+                <div class="hero-stat-label">Mission Status</div>
+                <div class="hero-stat-value green">● Active</div>
+              </div>
+              <div class="hero-stat">
+                <div class="hero-stat-label">System Status</div>
+                <div class="hero-stat-value green">● Online</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:0 24px 24px;">
+
+        <!-- STATUS SUMMARY CARDS -->
+        <div class="section-title">Current Health Status Summary</div>
+        <div class="status-grid">
+          <div class="status-card">
+            <div class="sc-label">Cardiovascular Status</div>
+            <div class="sc-value" id="sc-hr">78 <span class="sc-unit">BPM</span></div>
+            <div class="sc-sub">
+              <span class="sc-trend up">▲ +6 from baseline</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Rhythm: Sinus Normal &nbsp;|&nbsp; SpO₂: 97%</div>
+            <span class="sc-status monitor">Monitoring</span>
+          </div>
+          <div class="status-card">
+            <div class="sc-label">Oxygen Status</div>
+            <div class="sc-value" id="sc-spo2">97.2 <span class="sc-unit">%</span></div>
+            <div class="sc-sub">
+              <span class="sc-trend norm">→ Within Baseline</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Baseline: 97.8% &nbsp;|&nbsp; Range: 96.5–98.4%</div>
+            <span class="sc-status normal">Normal</span>
+          </div>
+          <div class="status-card">
+            <div class="sc-label">Blood Pressure</div>
+            <div class="sc-value">118<span class="sc-unit">/76</span></div>
+            <div class="sc-sub">
+              <span class="sc-trend norm">→ Within Baseline</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Baseline: 115/74 &nbsp;|&nbsp; Periodic measurement</div>
+            <span class="sc-status normal">Normal</span>
+          </div>
+          <div class="status-card warn">
+            <div class="sc-label">Monitoring Summary</div>
+            <div class="sc-value">12 <span class="sc-unit">param</span></div>
+            <div class="sc-sub" style="flex-wrap:wrap;gap:8px;">
+              <span style="color:var(--amber);">2 changes detected</span>
+              <span style="color:var(--red);">1 review item</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;">Last updated: <span class="font-mono" id="last-update">—</span></div>
+            <span class="sc-status review">Review Recommended</span>
+          </div>
+        </div>
+
+        <!-- FOUR KEY QUESTIONS -->
+        <div class="glass-card mb-6" style="margin-bottom:24px;">
+          <div class="card-header">
+            <div class="card-title"><span class="ct-icon" aria-hidden="true"></span> Key Health Questions</div>
+            <span class="text-xs text-dim">Spaceflight-Aware Analysis</span>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;">
+            <div style="padding:16px;border-radius:10px;background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);">
+              <div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px;">What Changed?</div>
+              <div style="font-size:13px;color:var(--text-prim);">HR elevated +6 BPM above baseline. New ECG rhythm pattern on Day 144.</div>
+            </div>
+            <div style="padding:16px;border-radius:10px;background:rgba(255,193,7,.05);border:1px solid rgba(255,193,7,.15);">
+              <div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--amber);margin-bottom:6px;">How Much?</div>
+              <div style="font-size:13px;color:var(--text-prim);">HR: 8.3% above personal baseline. Intermittent in ECG classification output.</div>
+            </div>
+            <div style="padding:16px;border-radius:10px;background:rgba(21,101,192,.08);border:1px solid rgba(21,101,192,.25);">
+              <div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--blue-light);margin-bottom:6px;">Spaceflight Context?</div>
+              <div style="font-size:13px;color:var(--text-prim);">Day 147 — late mission. Recent EVA, elevated CO₂ exposure window, mild fluid shift.</div>
+            </div>
+            <div style="padding:16px;border-radius:10px;background:rgba(255,61,61,.05);border:1px solid rgba(255,61,61,.15);">
+              <div style="font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--red);margin-bottom:6px;">Needs Attention?</div>
+              <div style="font-size:13px;color:var(--text-prim);">ECG pattern: medical review recommended. HR trend: monitoring. SpO₂ & BP: within baseline.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LIVE TELEMETRY -->
+        <div class="section-title">Live Physiological Telemetry</div>
+
+        <!-- HEART RATE CHART -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title-block">
+              <div class="chart-name">
+                <span>CV</span> Heart Rate
+                <span class="live-badge">Live</span>
+              </div>
+              <div class="chart-current-val"><span id="hr-display">78</span> <span class="cv-unit">BPM</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+              <div class="time-range-btns">
+                <button class="trb active" onclick="setTimeRange('hr','live',this)">Live</button>
+                <button class="trb" onclick="setTimeRange('hr','30m',this)">30 Min</button>
+                <button class="trb" onclick="setTimeRange('hr','6h',this)">6 Hr</button>
+                <button class="trb" onclick="setTimeRange('hr','24h',this)">24 Hr</button>
+                <button class="trb" onclick="setTimeRange('hr','7d',this)">7 Days</button>
+                <button class="trb" onclick="setTimeRange('hr','mission',this)">Mission</button>
+              </div>
+              <div class="chart-meta">
+                <div class="cm-item">
+                  <div class="cm-label">Baseline</div>
+                  <div class="cm-value baseline">72 BPM</div>
+                </div>
+                <div class="cm-item">
+                  <div class="cm-label">Min (24h)</div>
+                  <div class="cm-value">58</div>
+                </div>
+                <div class="cm-item">
+                  <div class="cm-label">Max (24h)</div>
+                  <div class="cm-value">102</div>
+                </div>
+                <div class="cm-item">
+                  <div class="cm-label">Deviation</div>
+                  <div class="cm-value dev-pos">+6 BPM</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="hr-chart"></canvas>
+          </div>
+          <div class="baseline-bar">
+            <div class="bl-indicator"></div>
+            <div class="bl-text">Personal Baseline: <strong>72 BPM</strong> &nbsp;|&nbsp; Current: <strong id="hr-bl-val">78 BPM</strong> &nbsp;|&nbsp; Deviation: <strong id="hr-bl-dev">+6 BPM</strong></div>
+            <div class="bl-status above" id="hr-bl-status">Above Personal Baseline</div>
+          </div>
+        </div>
+
+        <!-- SpO2 CHART -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title-block">
+              <div class="chart-name">
+                <span>O₂</span> Blood Oxygen Saturation (SpO₂)
+                <span class="live-badge">Live</span>
+              </div>
+              <div class="chart-current-val"><span id="spo2-display">97.2</span> <span class="cv-unit">%</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+              <div class="time-range-btns">
+                <button class="trb active">Live</button>
+                <button class="trb">30 Min</button>
+                <button class="trb">6 Hr</button>
+                <button class="trb">24 Hr</button>
+              </div>
+              <div class="chart-meta">
+                <div class="cm-item"><div class="cm-label">Baseline</div><div class="cm-value baseline">97.8%</div></div>
+                <div class="cm-item"><div class="cm-label">Min</div><div class="cm-value">96.5%</div></div>
+                <div class="cm-item"><div class="cm-label">Max</div><div class="cm-value">98.4%</div></div>
+                <div class="cm-item"><div class="cm-label">Deviation</div><div class="cm-value dev-neg">–0.6%</div></div>
+              </div>
+            </div>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="spo2-chart"></canvas>
+          </div>
+          <div class="baseline-bar">
+            <div class="bl-indicator"></div>
+            <div class="bl-text">Personal Baseline: <strong>97.8%</strong> &nbsp;|&nbsp; Current: <strong>97.2%</strong> &nbsp;|&nbsp; Deviation: <strong>–0.6%</strong></div>
+            <div class="bl-status within">Within Personal Baseline</div>
+          </div>
+        </div>
+
+        <!-- ECG MONITOR -->
+        <div id="ecg-monitor">
+          <div class="ecg-grid-bg"></div>
+          <div class="ecg-header">
+            <div class="ecg-title">ECG ECG MONITOR — Lead II</div>
+            <div class="ecg-hr-display"><span id="ecg-hr">78</span> <span class="ecg-hr-unit">BPM</span></div>
+            <div class="ecg-stats">
+              <div class="ecg-stat">
+                <div class="ecg-stat-label">Rhythm</div>
+                <div class="ecg-stat-value" style="color:var(--green);">Sinus</div>
+              </div>
+              <div class="ecg-stat">
+                <div class="ecg-stat-label">QTc</div>
+                <div class="ecg-stat-value">412 ms</div>
+              </div>
+              <div class="ecg-stat">
+                <div class="ecg-stat-label">HRV</div>
+                <div class="ecg-stat-value">42 ms</div>
+              </div>
+              <div class="ecg-stat">
+                <div class="ecg-stat-label">PVC</div>
+                <div class="ecg-stat-value" style="color:var(--amber);">2%</div>
+              </div>
+            </div>
+            <div class="ecg-controls">
+              <button class="ecg-btn active" id="ecg-pause-btn" onclick="toggleECGPause()">PAUSE Pause</button>
+              <button class="ecg-btn">FULL Full</button>
+              <button class="ecg-btn">Lead II ▾</button>
+            </div>
+          </div>
+          <canvas id="ecg-canvas"></canvas>
+        </div>
+
+        <!-- BLOOD PRESSURE -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div class="chart-title-block">
+              <div class="chart-name">
+                <span>BP</span> Blood Pressure
+                <span class="periodic-badge">Periodic</span>
+              </div>
+              <div class="chart-current-val">118<span class="cv-unit">/</span>76 <span class="cv-unit">mmHg</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+              <div class="time-range-btns">
+                <button class="trb active">24 Hr</button>
+                <button class="trb">7 Days</button>
+                <button class="trb">Mission</button>
+              </div>
+              <div class="chart-meta">
+                <div class="cm-item"><div class="cm-label">Sys Baseline</div><div class="cm-value baseline">115 mmHg</div></div>
+                <div class="cm-item"><div class="cm-label">Dia Baseline</div><div class="cm-value baseline">74 mmHg</div></div>
+                <div class="cm-item"><div class="cm-label">Deviation</div><div class="cm-value dev-pos">+3/+2</div></div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--amber);background:rgba(255,193,7,.08);border:1px solid rgba(255,193,7,.15);border-radius:6px;padding:6px 12px;margin-bottom:10px;letter-spacing:.06em;">
+            PERIODIC Periodic / Sensor-Dependent Measurement — not continuous cuff monitoring
+          </div>
+          <div class="chart-wrap">
+            <canvas id="bp-chart"></canvas>
+          </div>
+          <div class="baseline-bar">
+            <div class="bl-indicator"></div>
+            <div class="bl-text">Sys Baseline: <strong>115 mmHg</strong> &nbsp;|&nbsp; Dia Baseline: <strong>74 mmHg</strong> &nbsp;|&nbsp; Current: <strong>118/76</strong></div>
+            <div class="bl-status within">Within Personal Baseline</div>
+          </div>
+        </div>
+
+        <!-- PARAM CARDS -->
+        <div class="section-title">Additional Physiological Parameters</div>
+        <div class="param-grid">
+          <div class="param-card">
+            <div class="pc-top">
+              <div class="pc-name">Respiratory Rate</div>
+              <span class="live-badge">Live</span>
+            </div>
+            <div class="pc-value">14 <span class="pc-unit">br/min</span></div>
+            <div class="pc-baseline">Baseline: <span>14 br/min</span></div>
+            <div class="pc-sparkline"><canvas id="sp-rr"></canvas></div>
+          </div>
+          <div class="param-card">
+            <div class="pc-top">
+              <div class="pc-name">Body Temperature</div>
+              <span class="periodic-badge">Periodic</span>
+            </div>
+            <div class="pc-value">36.8 <span class="pc-unit">°C</span></div>
+            <div class="pc-baseline">Baseline: <span>36.7°C</span></div>
+            <div class="pc-sparkline"><canvas id="sp-temp"></canvas></div>
+          </div>
+          <div class="param-card">
+            <div class="pc-top">
+              <div class="pc-name">HRV (rMSSD)</div>
+              <span class="live-badge">Live</span>
+            </div>
+            <div class="pc-value">42 <span class="pc-unit">ms</span></div>
+            <div class="pc-baseline">Baseline: <span>52 ms</span> — <span style="color:var(--amber);">↓ 19%</span></div>
+            <div class="pc-sparkline"><canvas id="sp-hrv"></canvas></div>
+          </div>
+          <div class="param-card">
+            <div class="pc-top">
+              <div class="pc-name">ECG Rhythm</div>
+              <span class="live-badge">Live</span>
+            </div>
+            <div class="pc-value" style="font-size:16px;padding-top:6px;">Sinus Normal</div>
+            <div class="pc-baseline">AI Classification — <span style="color:var(--green);">Normal</span></div>
+            <div style="height:32px;margin-top:8px;display:flex;align-items:center;gap:6px;">
+              <span style="font-size:9px;color:var(--text-dim);">PVC burden:</span>
+              <div style="height:4px;flex:1;background:rgba(0,200,255,.1);border-radius:2px;overflow:hidden;"><div style="height:100%;width:2%;background:var(--amber);border-radius:2px;"></div></div>
+              <span style="font-size:10px;color:var(--amber);">2%</span>
+            </div>
+          </div>
+          <div class="param-card">
+            <div class="pc-top">
+              <div class="pc-name">Activity Level</div>
+              <span class="live-badge">Live</span>
+            </div>
+            <div class="pc-value" style="font-size:16px;padding-top:6px;">Light Exercise</div>
+            <div class="pc-baseline">Exercise session: <span>34 min</span></div>
+            <div class="pc-sparkline"><canvas id="sp-act"></canvas></div>
+          </div>
+          <div class="param-card">
+            <div class="pc-top">
+              <div class="pc-name">Sleep / Rest</div>
+              <span class="periodic-badge">Periodic</span>
+            </div>
+            <div class="pc-value">6.8 <span class="pc-unit">hr</span></div>
+            <div class="pc-baseline">Baseline: <span>7.2 hr</span> — <span style="color:var(--amber);">↓ below</span></div>
+            <div class="pc-sparkline"><canvas id="sp-sleep"></canvas></div>
+          </div>
+        </div>
+
+        <!-- 3D BODY VISUALIZATION -->
+        <div class="section-title">Astronaut Health Systems</div>
+        <div id="body-viz-wrap" class="mb-6" style="margin-bottom:24px;">
+          <canvas id="body-canvas"></canvas>
+          <div class="body-systems">
+            <div class="body-sys-card" onclick="navigate('cardiovascular')">
+              <div class="body-sys-icon">🫀</div>
+              <div class="body-sys-info">
+                <div class="body-sys-name">Cardiovascular</div>
+                <div class="body-sys-status">HR 78 BPM · SpO₂ 97% · BP 118/76</div>
+              </div>
+              <span class="body-sys-badge mon">Monitoring</span>
+            </div>
+            <div class="body-sys-card" onclick="navigate('blood-oxygen')">
+              <div class="body-sys-icon">🫁</div>
+              <div class="body-sys-info">
+                <div class="body-sys-name">Respiratory / Oxygen</div>
+                <div class="body-sys-status">SpO₂ 97.2% · RR 14 br/min</div>
+              </div>
+              <span class="body-sys-badge ok">Normal</span>
+            </div>
+            <div class="body-sys-card" onclick="navigate('cognitive')">
+              <div class="body-sys-icon">🧠</div>
+              <div class="body-sys-info">
+                <div class="body-sys-name">Cognitive</div>
+                <div class="body-sys-status">4 domains monitored · Within baseline</div>
+              </div>
+              <span class="body-sys-badge ok">Normal</span>
+            </div>
+            <div class="body-sys-card future" onclick="navigate('bone')">
+              <div class="body-sys-icon">🦴</div>
+              <div class="body-sys-info">
+                <div class="body-sys-name">Bone Health</div>
+                <div class="body-sys-status">Future Module — Integration Pending</div>
+              </div>
+              <span class="body-sys-badge future">Future</span>
+            </div>
+            <div class="body-sys-card future" onclick="navigate('immune')">
+              <div class="body-sys-icon">🧬</div>
+              <div class="body-sys-info">
+                <div class="body-sys-name">Immune Health</div>
+                <div class="body-sys-status">Future Module — Integration Pending</div>
+              </div>
+              <span class="body-sys-badge future">Future</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- DATA FLOW -->
+        <div class="section-title">System Data Flow</div>
+        <div class="glass-card mb-6" style="margin-bottom:24px;">
+          <div class="arch-flow">
+            <div class="arch-node highlight">CREW ASTRONAUT</div>
+            <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-particle"></div><div class="arch-arrow-head">▼</div></div>
+            <div class="arch-node-row">
+              <div class="arch-node secondary">ECG Sensor</div>
+              <div class="arch-node secondary">HR Monitor</div>
+              <div class="arch-node secondary">SpO₂ Probe</div>
+              <div class="arch-node secondary">BP Cuff</div>
+              <div class="arch-node secondary" style="opacity:.5;">Immune — Future</div>
+            </div>
+            <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-particle" style="animation-delay:.4s"></div><div class="arch-arrow-head">▼</div></div>
+            <div class="arch-node"> DATA PROCESSING PIPELINE</div>
+            <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-particle" style="animation-delay:.8s"></div><div class="arch-arrow-head">▼</div></div>
+            <div class="arch-node">AI AI / ECG-FM ANALYTICS ENGINE</div>
+            <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-particle" style="animation-delay:1.2s"></div><div class="arch-arrow-head">▼</div></div>
+            <div class="arch-node-row">
+              <div class="arch-node secondary" style="border-color:var(--cyan);">Personal Baseline</div>
+              <div class="arch-node secondary" style="border-color:var(--cyan);">Spaceflight Context</div>
+            </div>
+            <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-particle" style="animation-delay:1.6s"></div><div class="arch-arrow-head">▼</div></div>
+            <div class="arch-node">DATA HEALTH INTERPRETATION</div>
+            <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-particle" style="animation-delay:2s"></div><div class="arch-arrow-head">▼</div></div>
+            <div class="arch-node highlight">MED ASTRONAUT + FLIGHT SURGEON REVIEW</div>
+            <div style="font-size:10px;color:var(--text-dim);margin-top:12px;letter-spacing:.08em;">
+              AI Decision Support Only — All interpretations require qualified medical review
+            </div>
+          </div>
+        </div>
+
+        <!-- MISSION TIMELINE -->
+        <div class="section-title">Mission Health Timeline</div>
+        <div class="glass-card mb-6" style="margin-bottom:24px;">
+          <div class="timeline-wrap">
+            <div class="timeline-track">
+              <div class="timeline-line"></div>
+              <div class="tl-point" onclick="showTimelineDetail('preflight')">
+                <div class="tl-dot"></div>
+                <div class="tl-label">Pre-Flight<br>Baseline</div>
+                <div class="tl-icons"><span class="tl-icon">CVCOGBH</span></div>
+              </div>
+              <div class="tl-point" onclick="showTimelineDetail('launch')">
+                <div class="tl-dot"></div>
+                <div class="tl-label">Launch<br>Day 0</div>
+                <div class="tl-icons"><span class="tl-icon">FLIGHT</span></div>
+              </div>
+              <div class="tl-point" onclick="showTimelineDetail('d30')">
+                <div class="tl-dot"></div>
+                <div class="tl-label">Day 30<br>Early</div>
+                <div class="tl-icons"><span class="tl-icon">CV</span></div>
+              </div>
+              <div class="tl-point" onclick="showTimelineDetail('d60')">
+                <div class="tl-dot"></div>
+                <div class="tl-label">Day 60<br>Mid</div>
+                <div class="tl-icons"><span class="tl-icon">USCOG</span></div>
+              </div>
+              <div class="tl-point" onclick="showTimelineDetail('d90')">
+                <div class="tl-dot"></div>
+                <div class="tl-label">Day 90<br>Quarter</div>
+                <div class="tl-icons"><span class="tl-icon">CV</span></div>
+              </div>
+              <div class="tl-point" onclick="showTimelineDetail('d120')">
+                <div class="tl-dot"></div>
+                <div class="tl-label">Day 120</div>
+                <div class="tl-icons"><span class="tl-icon">COG</span></div>
+              </div>
+              <div class="tl-point" onclick="showTimelineDetail('d144')">
+                <div class="tl-dot" style="border-color:var(--amber);"></div>
+                <div class="tl-label" style="color:var(--amber);">Day 144<br>ECG Event</div>
+                <div class="tl-icons"><span class="tl-icon">ECG</span></div>
+              </div>
+              <div class="tl-point current">
+                <div class="tl-dot"></div>
+                <div class="tl-label">Day 147<br>Current</div>
+                <div class="tl-icons"><span class="tl-icon"></span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ALERTS -->
+        <div class="section-title">Mission Alerts</div>
+        <div class="alerts-list mb-6" style="margin-bottom:24px;">
+          <div class="alert-item">
+            <div class="alert-icon review">❤️</div>
+            <div class="alert-body">
+              <div class="alert-level review">REVIEW</div>
+              <div class="alert-msg">New ECG rhythm pattern detected — differs from recent personal baseline</div>
+              <div class="alert-detail">Parameter: ECG Classification &nbsp;|&nbsp; Baseline: Sinus Normal &nbsp;|&nbsp; Change: Pattern variation Day 144 &nbsp;|&nbsp; PVC burden 2%</div>
+              <span class="alert-view-btn" onclick="navigate('ecg-ai')">View ECG AI Analysis →</span>
+            </div>
+            <div class="alert-time">Day 144<br>09:32 UTC</div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-icon monitor">🫀</div>
+            <div class="alert-body">
+              <div class="alert-level monitor">MONITORING</div>
+              <div class="alert-msg">Heart rate is outside recent personal baseline by +6 BPM</div>
+              <div class="alert-detail">Parameter: HR &nbsp;|&nbsp; Baseline: 72 BPM &nbsp;|&nbsp; Current: ~78 BPM &nbsp;|&nbsp; Possible: Post-exercise, mission day effect</div>
+              <span class="alert-view-btn" onclick="navigate('cardiovascular')">View Cardiovascular →</span>
+            </div>
+            <div class="alert-time">Day 147<br>11:04 UTC</div>
+          </div>
+          <div class="alert-item">
+            <div class="alert-icon info">🛰️</div>
+            <div class="alert-body">
+              <div class="alert-level info">INFORMATION</div>
+              <div class="alert-msg">Blood pressure trend: slight upward change over last 24 hours</div>
+              <div class="alert-detail">Parameter: Systolic BP &nbsp;|&nbsp; Change: +3 mmHg &nbsp;|&nbsp; Within normal physiological variation</div>
+              <span class="alert-view-btn">View Details →</span>
+            </div>
+            <div class="alert-time">Day 147<br>08:15 UTC</div>
+          </div>
+        </div>
+
+        </div><!-- end inner padding -->
+      </div>
+    </div><!-- end page-overview -->
+
+    <!-- ==================== PAGE: CARDIOVASCULAR ==================== -->
+    <div class="page" id="page-cardiovascular">
+      <div style="padding:0 0 24px;">
+        <div style="background:linear-gradient(135deg,rgba(220,20,60,.08) 0%,rgba(4,12,28,.9) 100%);border-radius:var(--panel-r);padding:40px 48px;margin-bottom:24px;border:1px solid rgba(220,20,60,.2);position:relative;overflow:hidden;">
+          <div style="font-size:10px;letter-spacing:.2em;color:#dc143c;text-transform:uppercase;margin-bottom:8px;">Cardiovascular Monitoring</div>
+          <div style="font-size:32px;font-weight:800;color:var(--text-prim);margin-bottom:6px;">CV Cardiovascular Dashboard</div>
+          <div style="font-size:13px;color:var(--text-sec);">Real-time cardiac monitoring, ECG analysis, and long-term trends</div>
+        </div>
+
+        <div class="status-grid" style="margin-bottom:24px;">
+          <div class="status-card">
+            <div class="sc-label">Heart Rate</div>
+            <div class="sc-value" id="cv-hr-val">78 <span class="sc-unit">BPM</span></div>
+            <div class="sc-sub"><span class="sc-trend up">▲ Above Baseline +6</span></div>
+            <span class="sc-status monitor">Monitoring</span>
+          </div>
+          <div class="status-card">
+            <div class="sc-label">SpO₂</div>
+            <div class="sc-value">97.2 <span class="sc-unit">%</span></div>
+            <div class="sc-sub"><span class="sc-trend norm">→ Within Baseline</span></div>
+            <span class="sc-status normal">Normal</span>
+          </div>
+          <div class="status-card">
+            <div class="sc-label">Systolic BP</div>
+            <div class="sc-value">118 <span class="sc-unit">mmHg</span></div>
+            <div class="sc-sub"><span class="sc-trend norm">→ Within Baseline</span></div>
+            <span class="sc-status normal">Normal</span>
+          </div>
+          <div class="status-card warn">
+            <div class="sc-label">ECG Rhythm</div>
+            <div class="sc-value" style="font-size:20px;padding-top:8px;">Sinus</div>
+            <div class="sc-sub"><span class="sc-trend up">PVC 2% · Pattern change</span></div>
+            <span class="sc-status monitor">Monitoring</span>
+          </div>
+        </div>
+
+        <!-- ECG Risk Markers -->
+        <div class="section-title">ECG Risk Markers</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:14px;margin-bottom:24px;">
+          <div class="glass-card" style="text-align:center;">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">PVC Burden</div>
+            <div style="font-size:28px;font-weight:800;color:var(--amber);margin:8px 0;">2%</div>
+            <span class="sc-status monitor">Monitoring</span>
+          </div>
+          <div class="glass-card" style="text-align:center;">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">QTc</div>
+            <div style="font-size:28px;font-weight:800;color:var(--green);margin:8px 0;">412<span style="font-size:14px;color:var(--text-dim)"> ms</span></div>
+            <span class="sc-status normal">Normal</span>
+          </div>
+          <div class="glass-card" style="text-align:center;">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">HRV (rMSSD)</div>
+            <div style="font-size:28px;font-weight:800;color:var(--amber);margin:8px 0;">42<span style="font-size:14px;color:var(--text-dim)"> ms</span></div>
+            <span class="sc-status monitor">↓ Below Baseline</span>
+          </div>
+          <div class="glass-card" style="text-align:center;">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">Bradycardia</div>
+            <div style="font-size:28px;font-weight:800;color:var(--green);margin:8px 0;">None</div>
+            <span class="sc-status normal">Normal</span>
+          </div>
+          <div class="glass-card" style="text-align:center;">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">Tachycardia</div>
+            <div style="font-size:28px;font-weight:800;color:var(--green);margin:8px 0;">None</div>
+            <span class="sc-status normal">Normal</span>
+          </div>
+          <div class="glass-card" style="text-align:center;">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">Repolarization</div>
+            <div style="font-size:28px;font-weight:800;color:var(--green);margin:8px 0;">Norm</div>
+            <span class="sc-status normal">Normal</span>
+          </div>
+        </div>
+
+        <!-- Long-term HR trend -->
+        <div class="section-title">Cardiovascular Trends — Mission Timeline</div>
+        <div class="chart-card" style="margin-bottom:18px;">
+          <div class="chart-header">
+            <div class="chart-title-block">
+              <div class="chart-name">Heart Rate — Mission Trend</div>
+            </div>
+            <div class="time-range-btns">
+              <button class="trb active">7 Days</button>
+              <button class="trb">30 Days</button>
+              <button class="trb">Mission</button>
+            </div>
+          </div>
+          <canvas id="cv-hr-trend"></canvas>
+          <div class="baseline-bar">
+            <div class="bl-indicator"></div>
+            <div class="bl-text">Pre-flight Baseline: <strong>72 BPM</strong> &nbsp;|&nbsp; 7-day average: <strong>76.4 BPM</strong></div>
+            <div class="bl-status above">Above Personal Baseline</div>
+          </div>
+        </div>
+
+        <div class="row">
+          <div class="col-6 chart-card">
+            <div class="chart-header">
+              <div class="chart-title-block"><div class="chart-name">HR Recovery After Exercise</div></div>
+            </div>
+            <canvas id="cv-hrr"></canvas>
+          </div>
+          <div class="col-6 chart-card">
+            <div class="chart-header">
+              <div class="chart-title-block"><div class="chart-name">Exercise Capacity (VO₂ max proxy)</div></div>
+            </div>
+            <canvas id="cv-vo2"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: ECG AI ANALYSIS ==================== -->
+    <div class="page" id="page-ecg-ai">
+      <div style="background:linear-gradient(135deg,rgba(0,200,255,.07) 0%,rgba(4,12,28,.9) 100%);border-radius:var(--panel-r);padding:40px 48px;margin-bottom:24px;border:1px solid var(--glass-bdr);">
+        <div style="font-size:10px;letter-spacing:.2em;color:var(--cyan);text-transform:uppercase;margin-bottom:8px;">AI Decision Support</div>
+        <div style="font-size:32px;font-weight:800;color:var(--text-prim);margin-bottom:6px;">AI ECG-FM AI Analysis</div>
+        <div style="font-size:13px;color:var(--text-sec);">Foundation model ECG interpretation with spaceflight context — decision support only, not a diagnosis</div>
+      </div>
+
+      <!-- WORKFLOW -->
+      <div class="section-title">Analysis Workflow</div>
+      <div class="ai-workflow" style="margin-bottom:24px;">
+        <div class="ai-step"><div class="ai-step-icon">📈</div><div class="ai-step-num">01</div><div class="ai-step-name">ECG Input</div></div>
+        <div class="ai-arrow">→</div>
+        <div class="ai-step"><div class="ai-step-icon" aria-hidden="true"></div><div class="ai-step-num">02</div><div class="ai-step-name">Preprocessing</div></div>
+        <div class="ai-arrow">→</div>
+        <div class="ai-step active"><div class="ai-step-icon">🤖</div><div class="ai-step-num">03</div><div class="ai-step-name">ECG-FM</div></div>
+        <div class="ai-arrow">→</div>
+        <div class="ai-step"><div class="ai-step-icon">🛰️</div><div class="ai-step-num">04</div><div class="ai-step-name">Spaceflight Context</div></div>
+        <div class="ai-arrow">→</div>
+        <div class="ai-step"><div class="ai-step-icon">🔎</div><div class="ai-step-num">05</div><div class="ai-step-name">Risk Interpretation</div></div>
+        <div class="ai-arrow">→</div>
+        <div class="ai-step"><div class="ai-step-icon">🧑‍🚀</div><div class="ai-step-num">06</div><div class="ai-step-name">Human Review</div></div>
+      </div>
+
+      <!-- AI RESULT -->
+      <div class="ai-result-card" style="margin-bottom:18px;">
+        <div style="font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px;">AI Model Result — Latest Analysis · Day 144, 09:32 UTC</div>
+        <div class="ai-finding change">SIM CHANGE DETECTED</div>
+        <div style="font-size:14px;color:var(--text-prim);margin:10px 0;">"Rhythm pattern differs from the astronaut's recent personal baseline. Intermittent variation in classification output consistent with increased PVC burden."</div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:16px;">
+          <div style="flex:1;min-width:180px;padding:14px;border-radius:10px;background:rgba(255,61,61,.06);border:1px solid rgba(255,61,61,.18);">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--red);margin-bottom:6px;">Recommended Action</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text-prim);">Medical Review Recommended</div>
+          </div>
+          <div style="flex:1;min-width:180px;padding:14px;border-radius:10px;background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px;">Model Confidence</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text-prim);">Moderate — Pattern change from baseline</div>
+          </div>
+        </div>
+        <div class="ai-disclaimer">SIM AI decision support only — not a medical diagnosis. All ECG interpretations require review by a qualified flight surgeon.</div>
+      </div>
+
+      <!-- ECG SALIENCY -->
+      <div class="section-title">ECG Explanation — Highlighted Region</div>
+      <div id="ecg-monitor" style="margin-bottom:24px;">
+        <div class="ecg-grid-bg"></div>
+        <div class="ecg-header">
+          <div class="ecg-title">ECG ECG — Saliency Visualization (Lead II, Day 144)</div>
+          <div style="font-size:11px;color:var(--amber);background:rgba(255,193,7,.08);padding:4px 10px;border-radius:6px;border:1px solid rgba(255,193,7,.2);">
+            Highlighted region influenced AI interpretation
+          </div>
+        </div>
+        <canvas id="ecg-ai-canvas" style="width:100%;height:120px;position:relative;z-index:1;"></canvas>
+      </div>
+
+      <!-- SPACEFLIGHT CONTEXT -->
+      <div class="section-title">Spaceflight Context Used in Analysis</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;margin-bottom:24px;">
+        <div class="glass-card"><div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">Personal Baseline</div><div style="font-size:16px;font-weight:700;color:var(--cyan);margin-top:4px;">72 BPM · Sinus Normal</div></div>
+        <div class="glass-card"><div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">Mission Day</div><div style="font-size:16px;font-weight:700;color:var(--text-prim);margin-top:4px;">Day 147 (Late Mission)</div></div>
+        <div class="glass-card"><div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">Recent HR Trend</div><div style="font-size:16px;font-weight:700;color:var(--amber);margin-top:4px;">↑ +6 BPM (7-day)</div></div>
+        <div class="glass-card"><div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">QTc</div><div style="font-size:16px;font-weight:700;color:var(--green);margin-top:4px;">412 ms (Normal)</div></div>
+        <div class="glass-card"><div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">PVCs</div><div style="font-size:16px;font-weight:700;color:var(--amber);margin-top:4px;">2% burden</div></div>
+        <div class="glass-card"><div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);">Spaceflight Factor</div><div style="font-size:16px;font-weight:700;color:var(--text-prim);margin-top:4px;">Fluid shift, microgravity</div></div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: BLOOD & OXYGEN ==================== -->
+    <div class="page" id="page-blood-oxygen">
+      <div style="background:linear-gradient(135deg,rgba(21,101,192,.1) 0%,rgba(4,12,28,.9) 100%);border-radius:var(--panel-r);padding:40px 48px;margin-bottom:24px;border:1px solid rgba(21,101,192,.3);">
+        <div style="font-size:10px;letter-spacing:.2em;color:var(--blue-light);text-transform:uppercase;margin-bottom:8px;">Blood &amp; Oxygen Monitoring</div>
+        <div style="font-size:32px;font-weight:800;color:var(--text-prim);margin-bottom:6px;">O₂ Blood &amp; Oxygen Status</div>
+        <div style="font-size:13px;color:var(--text-sec);">SpO₂, respiratory parameters, and oxygen saturation trends</div>
+      </div>
+
+      <div class="status-grid" style="margin-bottom:24px;">
+        <div class="status-card">
+          <div class="sc-label">SpO₂</div>
+          <div class="sc-value">97.2 <span class="sc-unit">%</span></div>
+          <div class="sc-sub"><span class="sc-trend norm">→ Within Baseline</span></div>
+          <span class="sc-status normal">Normal</span>
+        </div>
+        <div class="status-card">
+          <div class="sc-label">Respiratory Rate</div>
+          <div class="sc-value">14 <span class="sc-unit">br/min</span></div>
+          <div class="sc-sub"><span class="sc-trend norm">→ At Baseline</span></div>
+          <span class="sc-status normal">Normal</span>
+        </div>
+      </div>
+
+      <div class="section-title">SpO₂ Trend — 24 Hours</div>
+      <div class="chart-card" style="margin-bottom:18px;">
+        <div class="chart-header">
+          <div class="chart-title-block">
+            <div class="chart-name">O₂ SpO₂ — 24 Hour Trend <span class="live-badge" style="margin-left:8px;">Live</span></div>
+            <div class="chart-current-val">97.2 <span class="cv-unit">%</span></div>
+          </div>
+          <div class="time-range-btns"><button class="trb active">24 Hr</button><button class="trb">7 Days</button><button class="trb">Mission</button></div>
+        </div>
+        <canvas id="bo-spo2-chart"></canvas>
+        <div class="baseline-bar">
+          <div class="bl-indicator"></div>
+          <div class="bl-text">Personal Baseline: <strong>97.8%</strong> &nbsp;|&nbsp; Current: <strong>97.2%</strong></div>
+          <div class="bl-status within">Within Personal Baseline</div>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title-block"><div class="chart-name">Respiratory Rate Trend <span class="live-badge" style="margin-left:8px;">Live</span></div></div>
+          <div class="time-range-btns"><button class="trb active">24 Hr</button><button class="trb">7 Days</button></div>
+        </div>
+        <canvas id="bo-rr-chart"></canvas>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: ULTRASOUND ==================== -->
+    <div class="page" id="page-ultrasound">
+      <div style="background:linear-gradient(135deg,rgba(0,144,187,.08) 0%,rgba(4,12,28,.9) 100%);border-radius:var(--panel-r);padding:40px 48px;margin-bottom:24px;border:1px solid rgba(0,144,187,.25);">
+        <div style="font-size:10px;letter-spacing:.2em;color:var(--cyan-dim);text-transform:uppercase;margin-bottom:8px;">Internal Jugular Vein Monitoring</div>
+        <div style="font-size:32px;font-weight:800;color:var(--text-prim);margin-bottom:6px;">US Ultrasound / IJV Monitoring</div>
+        <div style="font-size:13px;color:var(--text-sec);">Repeated ultrasound examination comparison — spaceflight intracranial pressure surrogate</div>
+      </div>
+
+      <div class="section-title">Scan Comparison — Previous vs Current</div>
+      <div class="ultra-comparison" style="margin-bottom:24px;">
+        <div style="position:relative;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-sec);margin-bottom:8px;">Previous Scan — Day 120</div>
+          <div class="ultra-frame">
+            <div class="ultra-frame-label">PREV · Day 120</div>
+            <canvas class="ultra-canvas" id="ultra-prev"></canvas>
+          </div>
+        </div>
+        <div style="position:relative;">
+          <div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-sec);margin-bottom:8px;">Current Scan — Day 147</div>
+          <div class="ultra-frame" style="border-color:rgba(0,200,255,.35);">
+            <div class="ultra-frame-label" style="color:var(--green);">CURRENT · Day 147</div>
+            <canvas class="ultra-canvas" id="ultra-curr"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass-card" style="margin-bottom:24px;">
+        <div class="card-header">
+          <div class="card-title">Anomaly Map &amp; Indicators</div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;">
+          <div style="padding:16px;border-radius:10px;background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.2);">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--green);margin-bottom:6px;">IJV Diameter</div>
+            <div style="font-size:20px;font-weight:700;color:var(--text-prim);">8.2 mm</div>
+            <div style="font-size:11px;color:var(--text-dim);">Baseline: 7.8 mm — Within range</div>
+          </div>
+          <div style="padding:16px;border-radius:10px;background:rgba(255,193,7,.05);border:1px solid rgba(255,193,7,.2);">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);margin-bottom:6px;">Flow Pattern</div>
+            <div style="font-size:20px;font-weight:700;color:var(--text-prim);">Monitor</div>
+            <div style="font-size:11px;color:var(--text-dim);">Mild variation from baseline pattern</div>
+          </div>
+          <div style="padding:16px;border-radius:10px;background:rgba(0,200,255,.05);border:1px solid rgba(0,200,255,.15);">
+            <div style="font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--cyan);margin-bottom:6px;">Next Scheduled</div>
+            <div style="font-size:20px;font-weight:700;color:var(--text-prim);">Day 160</div>
+            <div style="font-size:11px;color:var(--text-dim);">13 days from now</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">Scan History Timeline</div>
+      <div class="glass-card">
+        <div class="timeline-wrap">
+          <div class="timeline-track">
+            <div class="timeline-line"></div>
+            <div class="tl-point"><div class="tl-dot"></div><div class="tl-label">Pre-Flight<br>Baseline</div></div>
+            <div class="tl-point"><div class="tl-dot"></div><div class="tl-label">Day 30</div></div>
+            <div class="tl-point"><div class="tl-dot"></div><div class="tl-label">Day 60</div></div>
+            <div class="tl-point"><div class="tl-dot"></div><div class="tl-label">Day 90</div></div>
+            <div class="tl-point"><div class="tl-dot"></div><div class="tl-label">Day 120</div></div>
+            <div class="tl-point current"><div class="tl-dot"></div><div class="tl-label">Day 147<br>Current</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: COGNITIVE ==================== -->
+    <div class="page" id="page-cognitive">
+      <div style="background:linear-gradient(135deg,rgba(103,58,183,.1) 0%,rgba(4,12,28,.9) 100%);border-radius:var(--panel-r);padding:40px 48px;margin-bottom:24px;border:1px solid rgba(103,58,183,.25);">
+        <div style="font-size:10px;letter-spacing:.2em;color:#9c88d9;text-transform:uppercase;margin-bottom:8px;">Cognitive Performance Monitoring</div>
+        <div style="font-size:32px;font-weight:800;color:var(--text-prim);margin-bottom:6px;">COG Cognitive Monitoring</div>
+        <div style="font-size:13px;color:var(--text-sec);">Spaceflight cognitive performance — personal baseline comparison across four domains</div>
+      </div>
+
+      <div class="section-title">Cognitive Performance Workflow</div>
+      <div class="ai-workflow" style="margin-bottom:24px;">
+        <div class="ai-step"><div class="ai-step-icon">📊</div><div class="ai-step-num">01</div><div class="ai-step-name">Pre-Flight Baseline</div></div>
+        <div class="ai-arrow">→</div>
+        <div class="ai-step active"><div class="ai-step-icon">🚀</div><div class="ai-step-num">02</div><div class="ai-step-name">In-Flight Test</div></div>
+        <div class="ai-arrow">→</div>
+        <div class="ai-step"><div class="ai-step-icon">🔎</div><div class="ai-step-num">03</div><div class="ai-step-name">Compare</div></div>
+        <div class="ai-arrow">→</div>
+        <div class="ai-step"><div class="ai-step-icon">📈</div><div class="ai-step-num">04</div><div class="ai-step-name">Trend Check</div></div>
+        <div class="ai-arrow">→</div>
+        <div class="ai-step"><div class="ai-step-icon">🔎</div><div class="ai-step-num">05</div><div class="ai-step-name">Review</div></div>
+      </div>
+
+      <div class="section-title">Cognitive Domain Assessment</div>
+      <div class="cog-domain-grid">
+        <div class="cog-card">
+          <div class="cog-card-name"><span>ECG</span> Processing Speed</div>
+          <div class="cog-score">94<span class="cog-pct">%</span></div>
+          <div class="cog-bar-wrap"><div class="cog-bar" style="width:94%"></div></div>
+          <div class="cog-baseline">Pre-flight baseline: <span>97%</span></div>
+          <div class="cog-status-row">
+            <span style="font-size:11px;color:var(--amber);">↓ –3% from baseline</span>
+            <span class="sc-status monitor" style="font-size:9px;">Monitoring</span>
+          </div>
+        </div>
+        <div class="cog-card">
+          <div class="cog-card-name"><span>ATTN</span> Sustained Attention</div>
+          <div class="cog-score">91<span class="cog-pct">%</span></div>
+          <div class="cog-bar-wrap"><div class="cog-bar" style="width:91%"></div></div>
+          <div class="cog-baseline">Pre-flight baseline: <span>95%</span></div>
+          <div class="cog-status-row">
+            <span style="font-size:11px;color:var(--amber);">↓ –4% from baseline</span>
+            <span class="sc-status monitor" style="font-size:9px;">Monitoring</span>
+          </div>
+        </div>
+        <div class="cog-card">
+          <div class="cog-card-name"><span>WM</span> Working Memory</div>
+          <div class="cog-score">96<span class="cog-pct">%</span></div>
+          <div class="cog-bar-wrap"><div class="cog-bar" style="width:96%;background:linear-gradient(90deg,var(--green),var(--cyan))"></div></div>
+          <div class="cog-baseline">Pre-flight baseline: <span>95%</span></div>
+          <div class="cog-status-row">
+            <span style="font-size:11px;color:var(--green);">↑ +1% — Within baseline</span>
+            <span class="sc-status normal" style="font-size:9px;">Normal</span>
+          </div>
+        </div>
+        <div class="cog-card">
+          <div class="cog-card-name"><span>DEC</span> Decision Making</div>
+          <div class="cog-score">89<span class="cog-pct">%</span></div>
+          <div class="cog-bar-wrap"><div class="cog-bar" style="width:89%"></div></div>
+          <div class="cog-baseline">Pre-flight baseline: <span>93%</span></div>
+          <div class="cog-status-row">
+            <span style="font-size:11px;color:var(--amber);">↓ –4% from baseline</span>
+            <span class="sc-status monitor" style="font-size:9px;">Monitoring</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-title">Cognitive Trends — Mission Timeline</div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div class="chart-title-block"><div class="chart-name">COG Composite Cognitive Score — Mission Trend</div></div>
+          <div class="time-range-btns"><button class="trb active">Mission</button><button class="trb">90 Days</button></div>
+        </div>
+        <canvas id="cog-trend"></canvas>
+        <div class="baseline-bar">
+          <div class="bl-indicator"></div>
+          <div class="bl-text">Pre-flight Composite Baseline: <strong>95%</strong> &nbsp;|&nbsp; Current: <strong>92.5%</strong> &nbsp;|&nbsp; Consistent mild decline — within expected range</div>
+          <div class="bl-status above" style="color:var(--amber);">Monitoring</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: IMMUNE (COMING SOON) ==================== -->
+    <div class="page" id="page-immune">
+      <div class="coming-soon-hero">
+        <span class="cs-badge">IH Future Module</span>
+        <div class="cs-title">Immune Health Monitoring</div>
+        <div class="cs-sub">Comprehensive spaceflight immune monitoring will combine mission data, laboratory measurements, and longitudinal personal-baseline trends.</div>
+        <div class="cs-grid">
+          <div class="cs-item"><div class="cs-item-title">CBC / Blood Cell Trends</div><div class="cs-item-desc">White blood cell count, lymphocyte subsets, and granulocyte monitoring</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+          <div class="cs-item"><div class="cs-item-title">Inflammatory Markers</div><div class="cs-item-desc">CRP, IL-6, TNF-α and other spaceflight-relevant cytokines</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+          <div class="cs-item"><div class="cs-item-title">Immune Biomarkers</div><div class="cs-item-desc">NK cell activity, T-cell function, and immune activation markers</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+          <div class="cs-item"><div class="cs-item-title">Microbiome Data</div><div class="cs-item-desc">Gut microbiome diversity and spaceflight-related changes</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+          <div class="cs-item"><div class="cs-item-title">Mission-Related Changes</div><div class="cs-item-desc">Radiation-induced immune changes and microgravity effects</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+          <div class="cs-item"><div class="cs-item-title">Long-term Immune Trends</div><div class="cs-item-desc">Longitudinal immune function monitoring vs pre-flight baseline</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div style="text-align:center;padding:20px;">
+          <div style="font-size:14px;color:var(--text-sec);margin-bottom:12px;line-height:1.8;">
+            Future Integration: Immune health monitoring will combine mission data, laboratory<br>measurements, and longitudinal personal-baseline trends alongside spaceflight context.
+          </div>
+          <div style="display:inline-flex;gap:24px;flex-wrap:wrap;justify-content:center;font-size:12px;color:var(--text-dim);">
+            <span>LAB Lab Integration</span>
+            <span>→</span>
+            <span>DATA Immune Indicators</span>
+            <span>→</span>
+            <span>TREND Baseline Comparison</span>
+            <span>→</span>
+            <span>REVIEW Trend Detection</span>
+            <span>→</span>
+            <span>MED Health Interpretation</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: BONE (COMING SOON) ==================== -->
+    <div class="page" id="page-bone">
+      <div class="coming-soon-hero">
+        <span class="cs-badge">BH Future Module</span>
+        <div class="cs-title">Bone Health Monitoring</div>
+        <div class="cs-sub">Long-duration spaceflight bone health monitoring — tracking BMD, microstructure, and biomechanical parameters against personal baseline.</div>
+        <div class="cs-grid">
+          <div class="cs-item"><div class="cs-item-title">Bone Density (BMD)</div><div class="cs-item-desc">DXA-equivalent measurements, T-score vs personal baseline</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+          <div class="cs-item"><div class="cs-item-title">Bone Microstructure</div><div class="cs-item-desc">Trabecular and cortical bone parameters</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+          <div class="cs-item"><div class="cs-item-title">Calcium Indicators</div><div class="cs-item-desc">Serum calcium, PTH, Vitamin D, and bone turnover markers</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+          <div class="cs-item"><div class="cs-item-title">Biomechanical Measures</div><div class="cs-item-desc">Bone strength proxies and load distribution</div><div class="cs-disabled-chart" style="margin-top:10px;">Data Integration Pending</div></div>
+        </div>
+      </div>
+      <div class="glass-card">
+        <div class="arch-flow" style="padding:16px 0;">
+          <div class="arch-node secondary">Data Collection</div>
+          <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-arrow-head">▼</div></div>
+          <div class="arch-node secondary">Bone Indicators</div>
+          <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-arrow-head">▼</div></div>
+          <div class="arch-node secondary">Baseline Comparison</div>
+          <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-arrow-head">▼</div></div>
+          <div class="arch-node secondary">Trend Detection</div>
+          <div class="arch-arrow"><div class="arch-arrow-line"></div><div class="arch-arrow-head">▼</div></div>
+          <div class="arch-node secondary">Health Interpretation</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: MISSION CONTEXT ==================== -->
+    <div class="page" id="page-mission-context">
+      <div style="background:linear-gradient(135deg,rgba(0,90,160,.1) 0%,rgba(4,12,28,.9) 100%);border-radius:var(--panel-r);padding:40px 48px;margin-bottom:24px;border:1px solid rgba(0,90,160,.3);">
+        <div style="font-size:10px;letter-spacing:.2em;color:var(--blue-light);text-transform:uppercase;margin-bottom:8px;">Spaceflight Mission</div>
+        <div style="font-size:32px;font-weight:800;color:var(--text-prim);margin-bottom:6px;">MC Mission Context</div>
+        <div style="font-size:13px;color:var(--text-sec);">Environmental and operational context used alongside physiological measurements</div>
+      </div>
+
+      <div class="section-title">Current Mission Status</div>
+      <div class="mission-ctx-grid" style="margin-bottom:24px;">
+        <div class="mctx-card"><div class="mctx-icon">🧭</div><div class="mctx-label">Mission Day</div><div class="mctx-value text-cyan">Day 147</div><div class="mctx-sub">Long-duration phase</div></div>
+        <div class="mctx-card"><div class="mctx-icon">🌌</div><div class="mctx-label">Microgravity</div><div class="mctx-value">Active</div><div class="mctx-sub">ISS orbit — 0g environment</div></div>
+        <div class="mctx-card"><div class="mctx-icon">☢️</div><div class="mctx-label">Daily Radiation</div><div class="mctx-value" style="color:var(--amber);">0.48 mSv</div><div class="mctx-sub">Above ground reference</div></div>
+        <div class="mctx-card"><div class="mctx-icon">☀️</div><div class="mctx-label">Cumulative Dose</div><div class="mctx-value">72 mSv</div><div class="mctx-sub">Mission total (Day 147)</div></div>
+        <div class="mctx-card"><div class="mctx-icon">😴</div><div class="mctx-label">Sleep Last Night</div><div class="mctx-value text-amber">6.8 hr</div><div class="mctx-sub">Baseline: 7.2 hr — slightly low</div></div>
+        <div class="mctx-card"><div class="mctx-icon">🏃</div><div class="mctx-label">Exercise Today</div><div class="mctx-value text-green">34 min</div><div class="mctx-sub">ARED resistance session</div></div>
+        <div class="mctx-card"><div class="mctx-icon">👨‍🚀</div><div class="mctx-label">EVA Status</div><div class="mctx-value">Planned</div><div class="mctx-sub">Day 152 — 6.5 hr scheduled</div></div>
+        <div class="mctx-card"><div class="mctx-icon">🌫️</div><div class="mctx-label">CO₂ Exposure</div><div class="mctx-value text-amber">3.2 mmHg</div><div class="mctx-sub">ppCO₂ slightly elevated</div></div>
+        <div class="mctx-card"><div class="mctx-icon">💧</div><div class="mctx-label">Fluid Shift</div><div class="mctx-value">Mild</div><div class="mctx-sub">Expected — headward fluid redistribution</div></div>
+      </div>
+
+      <div class="section-title">Recent Mission Events</div>
+      <div class="glass-card">
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          <div style="display:flex;gap:16px;padding:12px;border-radius:8px;background:rgba(0,200,255,.04);border:1px solid rgba(0,200,255,.1);">
+            <div style="font-size:11px;color:var(--cyan);font-family:var(--font-mono);min-width:70px;">Day 146</div>
+            <div style="font-size:13px;color:var(--text-prim);">Exercise session (34 min ARED) completed — post-exercise HR elevation expected</div>
+          </div>
+          <div style="display:flex;gap:16px;padding:12px;border-radius:8px;background:rgba(255,193,7,.04);border:1px solid rgba(255,193,7,.1);">
+            <div style="font-size:11px;color:var(--amber);font-family:var(--font-mono);min-width:70px;">Day 145</div>
+            <div style="font-size:13px;color:var(--text-prim);">ppCO₂ elevated for 3-hour window — potential cardiovascular effect, now normalized</div>
+          </div>
+          <div style="display:flex;gap:16px;padding:12px;border-radius:8px;background:rgba(255,61,61,.04);border:1px solid rgba(255,61,61,.1);">
+            <div style="font-size:11px;color:var(--red);font-family:var(--font-mono);min-width:70px;">Day 144</div>
+            <div style="font-size:13px;color:var(--text-prim);">ECG rhythm pattern change detected — AI analysis flagged for review</div>
+          </div>
+          <div style="display:flex;gap:16px;padding:12px;border-radius:8px;background:rgba(0,200,255,.04);border:1px solid rgba(0,200,255,.1);">
+            <div style="font-size:11px;color:var(--cyan);font-family:var(--font-mono);min-width:70px;">Day 142</div>
+            <div style="font-size:13px;color:var(--text-prim);">Ultrasound scan completed — IJV within acceptable range</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PAGE: REPORTS ==================== -->
+    <div class="page" id="page-reports">
+      <div style="background:linear-gradient(135deg,rgba(0,100,0,.06) 0%,rgba(4,12,28,.9) 100%);border-radius:var(--panel-r);padding:40px 48px;margin-bottom:24px;border:1px solid rgba(0,200,118,.2);">
+        <div style="font-size:10px;letter-spacing:.2em;color:var(--green);text-transform:uppercase;margin-bottom:8px;">Mission Health Reports</div>
+        <div style="font-size:32px;font-weight:800;color:var(--text-prim);margin-bottom:6px;">RP Reports &amp; Exports</div>
+        <div style="font-size:13px;color:var(--text-sec);">Health summaries and data exports for flight surgeon and mission control</div>
+      </div>
+
+      <div class="section-title">Available Reports</div>
+      <div class="report-item"><div class="report-icon">📊</div><div class="report-info"><div class="report-name">Daily Health Summary — Day 147</div><div class="report-date">Generated: Day 147, 12:00 UTC · 8 pages</div></div><span class="report-badge new">New</span></div>
+      <div class="report-item"><div class="report-icon">🫀</div><div class="report-info"><div class="report-name">Cardiovascular Weekly Review — Week 21</div><div class="report-date">Generated: Day 144, 00:00 UTC · 14 pages</div></div><span class="report-badge gen">Generated</span></div>
+      <div class="report-item"><div class="report-icon">📈</div><div class="report-info"><div class="report-name">ECG AI Analysis Report — Day 144 Event</div><div class="report-date">Generated: Day 144, 11:30 UTC · 6 pages</div></div><span class="report-badge gen">Generated</span></div>
+      <div class="report-item"><div class="report-icon">🧠</div><div class="report-info"><div class="report-name">Cognitive Assessment — Month 5</div><div class="report-date">Generated: Day 150, 09:00 UTC · 10 pages</div></div><span class="report-badge gen">Generated</span></div>
+      <div class="report-item"><div class="report-icon">📡</div><div class="report-info"><div class="report-name">IJV Ultrasound Comparative Report</div><div class="report-date">Generated: Day 147, 14:22 UTC · 8 pages</div></div><span class="report-badge gen">Generated</span></div>
+      <div class="report-item"><div class="report-icon">📋</div><div class="report-info"><div class="report-name">Mission Health Trend Report — Days 1–147</div><div class="report-date">Generated: Day 147, 00:00 UTC · 32 pages</div></div><span class="report-badge gen">Generated</span></div>
+    </div>
+
+  </div><!-- /#main -->
+</div><!-- /#app -->
+
+<script>
+/* ==============================================================
+   GLOBALS & STATE
+   ============================================================== */
+const state = {
+  currentPage: 'overview',
+  ecgPaused: false,
+  hrData: [],
+  spo2Data: [],
+  bpData: [],
+  ecgBuffer: [],
+  ecgPhase: 0,
+  mouse: {x: 0, y: 0},
+  charts: {}
+};
+
+/* ==============================================================
+   NAVIGATION
+   ============================================================== */
+const pageMap = {
+  'overview':        'Mission Overview',
+  'cardiovascular':  'Cardiovascular',
+  'ecg-ai':          'ECG AI Analysis',
+  'blood-oxygen':    'Blood & Oxygen',
+  'ultrasound':      'Ultrasound / IJV',
+  'cognitive':       'Cognitive Monitoring',
+  'immune':          'Immune Health',
+  'bone':            'Bone Health',
+  'mission-context': 'Mission Context',
+  'reports':         'Reports'
+};
+
+function navigate(page) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+
+  // Show target page
+  const pageEl = document.getElementById('page-' + page);
+  if (pageEl) pageEl.classList.add('active');
+
+  // Highlight nav item
+  document.querySelectorAll('.nav-item').forEach(n => {
+    if (n.getAttribute('onclick') && n.getAttribute('onclick').includes("'" + page + "'")) {
+      n.classList.add('active');
+    }
+  });
+
+  document.getElementById('page-breadcrumb').textContent = pageMap[page] || page;
+  state.currentPage = page;
+
+  // Init page charts
+  setTimeout(() => initPageCharts(page), 100);
+}
+
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const btn = document.getElementById('sb-toggle');
+  sb.classList.toggle('collapsed');
+  btn.textContent = sb.classList.contains('collapsed') ? '▶' : '◀';
+}
+
+/* ==============================================================
+   CLOCK
+   ============================================================== */
+function updateClock() {
+  const now = new Date();
+  const utc = now.toUTCString().split(' ').slice(4,5)[0];
+  document.getElementById('mission-clock').textContent = utc + ' UTC';
+
+  const ts = now.toLocaleTimeString('en-US', {hour12:false, hour:'2-digit', minute:'2-digit'});
+  const lu = document.getElementById('last-update');
+  if (lu) lu.textContent = ts + ' UTC';
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+/* ==============================================================
+   THREE.JS SPACE BACKGROUND
+   ============================================================== */
+(function() {
+  const canvas = document.getElementById('space-canvas');
+  let renderer, scene, camera;
+  let stars, earthMesh, particleSystem, orbitLine, spaceship;
+  let spaceshipAngle = 0;
+  let animFrame;
+  const mouse = {x: 0, y: 0};
+
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: false, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setClearColor(0x010810, 1);
+
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 0, 80);
+
+    // --- STARS ---
+    const starGeo = new THREE.BufferGeometry();
+    const starCount = 2200;
+    const starPos = new Float32Array(starCount * 3);
+    const starSizes = new Float32Array(starCount);
+    for (let i = 0; i < starCount; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi   = Math.acos(2 * Math.random() - 1);
+      const r     = 400 + Math.random() * 800;
+      starPos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+      starPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+      starPos[i*3+2] = r * Math.cos(phi);
+      starSizes[i] = Math.random() * 2.5 + 0.5;
+    }
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+    starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+
+    const starMat = new THREE.PointsMaterial({
+      color: 0xffffff, size: 1.2, sizeAttenuation: true,
+      transparent: true, opacity: 0.82
+    });
+    stars = new THREE.Points(starGeo, starMat);
+    scene.add(stars);
+
+    // --- NEBULA PARTICLES ---
+    const nebGeo = new THREE.BufferGeometry();
+    const nebCount = 180;
+    const nebPos = new Float32Array(nebCount * 3);
+    for (let i = 0; i < nebCount; i++) {
+      nebPos[i*3]   = (Math.random() - 0.5) * 600;
+      nebPos[i*3+1] = (Math.random() - 0.5) * 300;
+      nebPos[i*3+2] = -200 + Math.random() * -200;
+    }
+    nebGeo.setAttribute('position', new THREE.BufferAttribute(nebPos, 3));
+    const nebMat = new THREE.PointsMaterial({
+      color: 0x0040a0, size: 6, sizeAttenuation: true,
+      transparent: true, opacity: 0.12
+    });
+    scene.add(new THREE.Points(nebGeo, nebMat));
+
+    // --- EARTH ---
+    const earthGeo = new THREE.SphereGeometry(38, 36, 36);
+    const earthCanvas = document.createElement('canvas');
+    earthCanvas.width = 512; earthCanvas.height = 256;
+    const ectx = earthCanvas.getContext('2d');
+    // Ocean
+    const grad = ectx.createLinearGradient(0,0,0,256);
+    grad.addColorStop(0,   '#001a40');
+    grad.addColorStop(0.3, '#003080');
+    grad.addColorStop(0.6, '#001e55');
+    grad.addColorStop(1,   '#000d28');
+    ectx.fillStyle = grad; ectx.fillRect(0,0,512,256);
+    // Land masses
+    const landColor = '#1a6b2a';
+    const lands = [
+      [60,60,220,120],[320,50,140,100],[30,150,160,80],
+      [230,150,180,90],[400,130,80,60],[100,30,100,50]
+    ];
+    lands.forEach(([x,y,w,h]) => {
+      ectx.fillStyle = landColor;
+      ectx.beginPath();
+      ectx.ellipse(x+w/2, y+h/2, w/2, h/2, 0, 0, Math.PI*2);
+      ectx.fill();
+    });
+    // Atmosphere
+    const atmosGrad = ectx.createLinearGradient(0,0,0,256);
+    atmosGrad.addColorStop(0, 'rgba(100,180,255,0.3)');
+    atmosGrad.addColorStop(0.5, 'rgba(50,120,200,0.1)');
+    atmosGrad.addColorStop(1, 'rgba(0,60,140,0.2)');
+    ectx.fillStyle = atmosGrad; ectx.fillRect(0,0,512,256);
+
+    const earthTex = new THREE.CanvasTexture(earthCanvas);
+    const earthMat = new THREE.MeshPhongMaterial({
+      map: earthTex,
+      shininess: 8,
+      specular: new THREE.Color(0x1144aa)
+    });
+    earthMesh = new THREE.Mesh(earthGeo, earthMat);
+    earthMesh.position.set(90, -30, -160);
+    scene.add(earthMesh);
+
+    // Atmosphere glow
+    const atmosGeo = new THREE.SphereGeometry(40.5, 32, 32);
+    const atmosMat = new THREE.MeshBasicMaterial({
+      color: 0x1166dd, transparent: true, opacity: 0.07,
+      side: THREE.FrontSide
+    });
+    const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
+    atmosMesh.position.copy(earthMesh.position);
+    scene.add(atmosMesh);
+
+    // --- LIGHTS ---
+    const sun = new THREE.DirectionalLight(0xffeedd, 1.4);
+    sun.position.set(200, 60, 100);
+    scene.add(sun);
+    scene.add(new THREE.AmbientLight(0x112244, 0.6));
+
+    // --- ORBITAL RING ---
+    const orbitGeo = new THREE.TorusGeometry(56, 0.3, 8, 120);
+    const orbitMat = new THREE.MeshBasicMaterial({
+      color: 0x004488, transparent: true, opacity: 0.4
+    });
+    const orbitMesh = new THREE.Mesh(orbitGeo, orbitMat);
+    orbitMesh.position.copy(earthMesh.position);
+    orbitMesh.rotation.x = Math.PI / 3.2;
+    scene.add(orbitMesh);
+
+    // Trajectory line (dashed arc)
+    const trajPts = [];
+    for (let a = 0; a < Math.PI*2; a += 0.12) {
+      trajPts.push(new THREE.Vector3(
+        earthMesh.position.x + 56 * Math.cos(a),
+        earthMesh.position.y + 18 * Math.sin(a),
+        earthMesh.position.z + 38 * Math.sin(a)
+      ));
+    }
+    const trajGeo = new THREE.BufferGeometry().setFromPoints(trajPts);
+    const trajMat = new THREE.LineBasicMaterial({color: 0x0088cc, transparent: true, opacity: 0.25});
+    scene.add(new THREE.Line(trajGeo, trajMat));
+
+    // --- SPACECRAFT ---
+    const shipGeo = new THREE.ConeGeometry(1.2, 4, 6);
+    const shipMat = new THREE.MeshPhongMaterial({color: 0xaaddff, shininess: 60});
+    spaceship = new THREE.Mesh(shipGeo, shipMat);
+    scene.add(spaceship);
+
+    // Small satellites
+    for (let i = 0; i < 3; i++) {
+      const satGeo = new THREE.BoxGeometry(0.6, 0.6, 2);
+      const satMat = new THREE.MeshPhongMaterial({color: 0x88bbcc, shininess: 40});
+      const sat = new THREE.Mesh(satGeo, satMat);
+      const angle = (i / 3) * Math.PI * 2;
+      sat.position.set(
+        earthMesh.position.x + (50 + i*8) * Math.cos(angle),
+        earthMesh.position.y + 5 * Math.sin(angle),
+        earthMesh.position.z + 30 * Math.sin(angle)
+      );
+      scene.add(sat);
+    }
+
+    // --- FLOATING PARTICLES (data flow) ---
+    const partGeo = new THREE.BufferGeometry();
+    const partCount = 300;
+    const partPos = new Float32Array(partCount * 3);
+    for (let i = 0; i < partCount; i++) {
+      partPos[i*3]   = (Math.random() - 0.5) * 200;
+      partPos[i*3+1] = (Math.random() - 0.5) * 120;
+      partPos[i*3+2] = (Math.random() - 0.5) * 80;
+    }
+    partGeo.setAttribute('position', new THREE.BufferAttribute(partPos, 3));
+    const partMat = new THREE.PointsMaterial({
+      color: 0x00ccff, size: 0.35, sizeAttenuation: true,
+      transparent: true, opacity: 0.55
+    });
+    particleSystem = new THREE.Points(partGeo, partMat);
+    scene.add(particleSystem);
+
+    // ANIMATE
+    function animate(t) {
+      animFrame = requestAnimationFrame(animate);
+      const sec = t * 0.001;
+
+      // Earth rotation
+      if (earthMesh) earthMesh.rotation.y = sec * 0.05;
+
+      // Stars slow drift
+      if (stars) stars.rotation.y = sec * 0.003;
+
+      // Spacecraft orbit
+      if (spaceship) {
+        spaceshipAngle = sec * 0.18;
+        spaceship.position.set(
+          earthMesh.position.x + 56 * Math.cos(spaceshipAngle),
+          earthMesh.position.y + 18 * Math.sin(spaceshipAngle * 0.5),
+          earthMesh.position.z + 38 * Math.sin(spaceshipAngle)
+        );
+        spaceship.rotation.z = spaceshipAngle + Math.PI / 2;
+      }
+
+      // Particles drift
+      if (particleSystem) {
+        particleSystem.rotation.y = sec * 0.02;
+        particleSystem.rotation.x = sec * 0.008;
+      }
+
+      // Parallax from mouse
+      camera.position.x += (mouse.x * 4 - camera.position.x) * 0.02;
+      camera.position.y += (-mouse.y * 2 - camera.position.y) * 0.02;
+      camera.lookAt(0, 0, 0);
+
+      renderer.render(scene, camera);
+    }
+    animate(0);
+
+    // Resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Mouse parallax
+    document.addEventListener('mousemove', (e) => {
+      mouse.x = (e.clientX / window.innerWidth)  * 2 - 1;
+      mouse.y = (e.clientY / window.innerHeight) * 2 - 1;
+      state.mouse = mouse;
+    });
+
+  } catch (e) {
+    console.warn('WebGL unavailable — using static background');
+    document.getElementById('space-canvas').style.display = 'none';
+    document.body.insertAdjacentHTML('afterbegin','<div class="static-bg-fallback"></div>');
+  }
+})();
+
+/* ==============================================================
+   HERO CANVAS (mini orbital scene)
+   ============================================================== */
+(function() {
+  const canvas = document.getElementById('hero-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  function resize() {
+    canvas.width  = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  const stars2D = Array.from({length: 140}, () => ({
+    x: Math.random(), y: Math.random(),
+    r: Math.random() * 1.4 + 0.3,
+    alpha: Math.random() * 0.8 + 0.2,
+    drift: (Math.random() - 0.5) * 0.00006
+  }));
+
+  let angle = 0;
+  function drawHero(ts) {
+    requestAnimationFrame(drawHero);
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Stars
+    stars2D.forEach(s => {
+      s.x = (s.x + s.drift + 1) % 1;
+      ctx.beginPath();
+      ctx.arc(s.x * W, s.y * H, s.r, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,255,255,${s.alpha})`;
+      ctx.fill();
+    });
+
+    // Earth
+    const ex = W * 0.82, ey = H * 0.3, er = H * 0.55;
+    const eGrad = ctx.createRadialGradient(ex-er*0.3, ey-er*0.3, er*0.1, ex, ey, er);
+    eGrad.addColorStop(0, 'rgba(30,100,200,0.85)');
+    eGrad.addColorStop(0.5, 'rgba(10,50,130,0.7)');
+    eGrad.addColorStop(1, 'rgba(0,15,50,0.4)');
+    ctx.beginPath();
+    ctx.arc(ex, ey, er, 0, Math.PI*2);
+    ctx.fillStyle = eGrad;
+    ctx.fill();
+
+    // Atmosphere glow
+    const ag = ctx.createRadialGradient(ex, ey, er*0.95, ex, ey, er*1.15);
+    ag.addColorStop(0, 'rgba(80,160,255,0.18)');
+    ag.addColorStop(1, 'rgba(0,80,200,0)');
+    ctx.beginPath();
+    ctx.arc(ex, ey, er*1.15, 0, Math.PI*2);
+    ctx.fillStyle = ag;
+    ctx.fill();
+
+    // Orbit ring
+    angle += 0.004;
+    ctx.save();
+    ctx.translate(ex, ey);
+    ctx.scale(1, 0.35);
+    ctx.beginPath();
+    ctx.arc(0, 0, er*1.18, 0, Math.PI*2);
+    ctx.strokeStyle = 'rgba(0,180,255,0.25)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+
+    // Spacecraft
+    const sx = ex + Math.cos(angle) * er * 1.18;
+    const sy = ey + Math.sin(angle) * er * 0.35 * 1.18;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(angle + Math.PI/2);
+    ctx.fillStyle = 'rgba(160,220,255,0.9)';
+    ctx.beginPath();
+    ctx.moveTo(0, -6); ctx.lineTo(-3, 4); ctx.lineTo(3, 4);
+    ctx.closePath(); ctx.fill();
+    ctx.restore();
+
+    // Engine glow
+    const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 14);
+    glow.addColorStop(0, 'rgba(0,200,255,0.22)');
+    glow.addColorStop(1, 'rgba(0,100,200,0)');
+    ctx.beginPath();
+    ctx.arc(sx, sy, 14, 0, Math.PI*2);
+    ctx.fillStyle = glow;
+    ctx.fill();
+  }
+  drawHero(0);
+})();
+
+/* ==============================================================
+   ECG WAVEFORM
+   ============================================================== */
+(function() {
+  const canvases = ['ecg-canvas','ecg-ai-canvas'];
+
+  // ECG template PQRST
+  function ecgSample(phase) {
+    const p = phase % 1;
+    if (p < 0.05)  return Math.sin(p/0.05 * Math.PI) * 0.12;
+    if (p < 0.14)  return 0;
+    if (p < 0.16)  return -0.08;
+    if (p < 0.18)  return -0.08;
+    if (p < 0.22)  return (p-0.18)/0.04 * 1.0 - 0.08;
+    if (p < 0.24)  return 1.0 - (p-0.22)/0.02 * 1.3;
+    if (p < 0.26)  return -0.3 + (p-0.24)/0.02 * 0.3;
+    if (p < 0.30)  return 0;
+    if (p < 0.44)  return Math.sin((p-0.30)/0.14 * Math.PI) * 0.22;
+    return 0;
+  }
+
+  canvases.forEach(id => {
+    const canvas = document.getElementById(id);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const bufLen = 420;
+    let buf = new Array(bufLen).fill(0);
+    let phase = Math.random();
+    let paused = false;
+    let raf;
+
+    if (id === 'ecg-canvas') {
+      window.ecgCtx   = ctx;
+      window.ecgBuf   = buf;
+      window.ecgPhase = 0;
+      window.pauseECG = (p) => { paused = p; };
+    }
+
+    function draw() {
+      raf = requestAnimationFrame(draw);
+      if (id === 'ecg-canvas' && state.ecgPaused) { return; }
+
+      const W = canvas.offsetWidth, H = canvas.offsetHeight || 130;
+      canvas.width = W; canvas.height = H;
+
+      // Advance
+      const speed = 0.018;
+      phase += speed;
+      const newVal = ecgSample(phase);
+
+      // Add occasional PVC
+      const pvcTriggered = (Math.random() < 0.001);
+      const sample = pvcTriggered ? -0.5 + Math.random() * 0.8 : newVal;
+
+      buf.push(sample);
+      if (buf.length > bufLen) buf.shift();
+
+      // Draw
+      ctx.clearRect(0, 0, W, H);
+
+      // Saliency overlay for AI page
+      if (id === 'ecg-ai-canvas') {
+        const salGrad = ctx.createLinearGradient(W*0.3, 0, W*0.55, 0);
+        salGrad.addColorStop(0, 'rgba(255,193,7,0)');
+        salGrad.addColorStop(0.5, 'rgba(255,193,7,0.08)');
+        salGrad.addColorStop(1, 'rgba(255,193,7,0)');
+        ctx.fillStyle = salGrad;
+        ctx.fillRect(W*0.3, 0, W*0.25, H);
+        ctx.fillStyle = 'rgba(255,193,7,0.5)';
+        ctx.font = '9px monospace';
+        ctx.fillText('AI FOCUS REGION', W*0.34, 14);
+      }
+
+      // Grid lines
+      ctx.strokeStyle = 'rgba(0,200,255,0.08)';
+      ctx.lineWidth = 1;
+      for (let x = 0; x < W; x += 20) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+      }
+      for (let y = 0; y < H; y += 20) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+      }
+
+      // Waveform
+      const mid = H * 0.5, amp = H * 0.38;
+      ctx.beginPath();
+      ctx.strokeStyle = id === 'ecg-canvas' ? '#00d8ff' : '#ffcc00';
+      ctx.lineWidth = 1.8;
+      ctx.shadowColor = id === 'ecg-canvas' ? '#00d8ff' : '#ffcc00';
+      ctx.shadowBlur = 4;
+      buf.forEach((v, i) => {
+        const x = (i / bufLen) * W;
+        const y = mid - v * amp;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      // Scanning line
+      ctx.strokeStyle = 'rgba(0,200,255,0.6)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(W-1, 0); ctx.lineTo(W-1, H);
+      ctx.stroke();
+
+      // Timestamp
+      ctx.fillStyle = 'rgba(0,200,255,0.5)';
+      ctx.font = '10px monospace';
+      const now = new Date();
+      ctx.fillText(now.toISOString().substr(11,8) + ' UTC  Lead II', 8, H-8);
+    }
+    draw();
+  });
+})();
+
+function toggleECGPause() {
+  state.ecgPaused = !state.ecgPaused;
+  const btn = document.getElementById('ecg-pause-btn');
+  if (btn) btn.textContent = state.ecgPaused ? '▶ Resume' : 'PAUSE Pause';
+}
+
+/* ==============================================================
+   CHART.JS DEFAULTS
+   ============================================================== */
+Chart.defaults.color = '#8bb8d0';
+Chart.defaults.borderColor = 'rgba(0,200,255,0.1)';
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(2,10,28,0.95)';
+Chart.defaults.plugins.tooltip.borderColor = 'rgba(0,200,255,0.3)';
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.titleColor = '#00c8ff';
+Chart.defaults.plugins.tooltip.bodyColor = '#e8f4fd';
+Chart.defaults.plugins.legend.display = false;
+
+/* ==============================================================
+   DATA GENERATORS
+   ============================================================== */
+function genHR(n, base=72, noise=8) {
+  let v = base; const out = [];
+  for (let i = 0; i < n; i++) {
+    v += (Math.random() - 0.5) * noise * 0.4;
+    v = Math.max(55, Math.min(105, v));
+    out.push(+v.toFixed(1));
+  }
+  return out;
+}
+function genSpO2(n, base=97.8) {
+  let v = base; const out = [];
+  for (let i = 0; i < n; i++) {
+    v += (Math.random() - 0.5) * 0.4;
+    v = Math.max(95.5, Math.min(99.5, v));
+    out.push(+v.toFixed(1));
+  }
+  return out;
+}
+function genBP(n, sBase=115, dBase=74) {
+  let s=sBase, d=dBase; const sOut=[], dOut=[];
+  for (let i = 0; i < n; i++) {
+    s += (Math.random()-0.5)*3; s=Math.max(105,Math.min(135,s));
+    d += (Math.random()-0.5)*2; d=Math.max(65, Math.min(90, d));
+    sOut.push(+s.toFixed(0)); dOut.push(+d.toFixed(0));
+  }
+  return {s:sOut, d:dOut};
+}
+function timeLabels(n, stepMin=1) {
+  const out = []; const now = Date.now();
+  for (let i = n; i >= 0; i--) {
+    const d = new Date(now - i * stepMin * 60000);
+    out.push(d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0'));
+  }
+  return out;
+}
+function missionDayLabels(n) {
+  return Array.from({length:n}, (_,i) => `D${i+1}`);
+}
+
+/* ==============================================================
+   SPARKLINES
+   ============================================================== */
+function initSparkline(id, data, color='#00c8ff') {
+  const canvas = document.getElementById(id);
+  if (!canvas) return;
+  if (state.charts[id]) { state.charts[id].destroy(); }
+  state.charts[id] = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: Array.from({length:data.length},(_,i)=>i),
+      datasets: [{data, borderColor: color, borderWidth: 1.5, fill: true,
+        backgroundColor: color.replace(')',',0.12)').replace('rgb','rgba'),
+        pointRadius: 0, tension: 0.4}]
+    },
+    options: {
+      responsive: false, animation: false,
+      plugins: {legend:{display:false}, tooltip:{enabled:false}},
+      scales: {x:{display:false}, y:{display:false}}
+    }
+  });
+}
+
+function initSparklines() {
+  initSparkline('sp-rr',   genHR(32, 14, 2), '#00c8ff');
+  initSparkline('sp-temp', genHR(32, 36.8, 0.3), '#ff6d00');
+  initSparkline('sp-hrv',  genHR(32, 42, 6),  '#ffc107');
+  initSparkline('sp-act',  genHR(32, 2, 1.5), '#00e676');
+  initSparkline('sp-sleep',genHR(14, 6.8, 0.8),'#9c88d9');
+}
+
+/* ==============================================================
+   MAIN CHART INIT
+   ============================================================== */
+function initOverviewCharts() {
+  // HR
+  destroyChart('hr-chart');
+  const hrData = genHR(60, 74, 10);
+  state.charts['hr-chart'] = new Chart(document.getElementById('hr-chart'), {
+    type: 'line',
+    data: {
+      labels: timeLabels(60),
+      datasets: [
+        { label:'Heart Rate', data: hrData, borderColor:'#00c8ff', borderWidth:2,
+          fill:true, backgroundColor:'rgba(0,200,255,0.07)', pointRadius:0, tension:0.4 },
+        { label:'Baseline', data: Array(61).fill(72), borderColor:'rgba(0,200,255,0.45)',
+          borderWidth:1.5, borderDash:[6,4], pointRadius:0, fill:false }
+      ]
+    },
+    options: chartOpts('BPM', [50,115])
+  });
+
+  // SpO2
+  destroyChart('spo2-chart');
+  const spo2Data = genSpO2(60);
+  state.charts['spo2-chart'] = new Chart(document.getElementById('spo2-chart'), {
+    type: 'line',
+    data: {
+      labels: timeLabels(60),
+      datasets: [
+        { label:'SpO₂', data: spo2Data, borderColor:'#1e88e5', borderWidth:2,
+          fill:true, backgroundColor:'rgba(30,136,229,0.07)', pointRadius:0, tension:0.4 },
+        { label:'Baseline', data: Array(61).fill(97.8), borderColor:'rgba(0,200,255,0.45)',
+          borderWidth:1.5, borderDash:[6,4], pointRadius:0, fill:false }
+      ]
+    },
+    options: chartOpts('%', [94,100])
+  });
+
+  // BP
+  destroyChart('bp-chart');
+  const bp = genBP(24, 115, 74);
+  state.charts['bp-chart'] = new Chart(document.getElementById('bp-chart'), {
+    type: 'line',
+    data: {
+      labels: timeLabels(24, 60),
+      datasets: [
+        { label:'Systolic', data: bp.s, borderColor:'#ff6d00', borderWidth:2,
+          fill:false, pointRadius:3, pointBackgroundColor:'#ff6d00', tension:0.3 },
+        { label:'Diastolic', data: bp.d, borderColor:'#1e88e5', borderWidth:2,
+          fill:false, pointRadius:3, pointBackgroundColor:'#1e88e5', tension:0.3 },
+        { label:'Sys Baseline', data: Array(25).fill(115), borderColor:'rgba(255,109,0,0.35)',
+          borderWidth:1, borderDash:[5,5], pointRadius:0, fill:false },
+        { label:'Dia Baseline', data: Array(25).fill(74), borderColor:'rgba(30,136,229,0.35)',
+          borderWidth:1, borderDash:[5,5], pointRadius:0, fill:false }
+      ]
+    },
+    options: chartOpts('mmHg', [55,150])
+  });
+}
+
+function initCardiovascularCharts() {
+  destroyChart('cv-hr-trend');
+  const hrTrend = genHR(147, 72, 7).map((v,i) => v + Math.sin(i/30)*2 + i*0.006);
+  state.charts['cv-hr-trend'] = new Chart(document.getElementById('cv-hr-trend'), {
+    type:'line',
+    data:{
+      labels: missionDayLabels(147),
+      datasets:[
+        { label:'HR', data:hrTrend, borderColor:'#00c8ff', borderWidth:1.5,
+          fill:true, backgroundColor:'rgba(0,200,255,0.06)', pointRadius:0, tension:0.4 },
+        { label:'Baseline', data:Array(147).fill(72), borderColor:'rgba(0,200,255,0.4)',
+          borderWidth:1.5, borderDash:[6,4], pointRadius:0, fill:false }
+      ]
+    },
+    options: chartOpts('BPM', [50,110])
+  });
+
+  destroyChart('cv-hrr');
+  state.charts['cv-hrr'] = new Chart(document.getElementById('cv-hrr'), {
+    type:'bar',
+    data:{
+      labels:['Wk 1','Wk 2','Wk 3','Wk 4','Wk 5','Wk 6'],
+      datasets:[{
+        label:'HR Recovery (bpm/min)',
+        data:[18,17,16,15,14,15],
+        backgroundColor:'rgba(0,200,255,0.25)',
+        borderColor:'#00c8ff', borderWidth:1.5, borderRadius:4
+      }]
+    },
+    options: chartOpts('BPM/min', [0,30])
+  });
+
+  destroyChart('cv-vo2');
+  state.charts['cv-vo2'] = new Chart(document.getElementById('cv-vo2'), {
+    type:'line',
+    data:{
+      labels: missionDayLabels(20).filter((_,i)=>i%3===0),
+      datasets:[{
+        label:'VO₂ proxy',
+        data:[48,46,45,44,43,43,42],
+        borderColor:'#00e676', borderWidth:2,
+        fill:true, backgroundColor:'rgba(0,230,118,0.07)',
+        pointRadius:3, tension:0.3
+      }]
+    },
+    options: chartOpts('ml/kg/min',[35,55])
+  });
+}
+
+function initBloodOxygenCharts() {
+  destroyChart('bo-spo2-chart');
+  const spData = genSpO2(96);
+  state.charts['bo-spo2-chart'] = new Chart(document.getElementById('bo-spo2-chart'), {
+    type:'line',
+    data:{
+      labels: timeLabels(96, 15),
+      datasets:[
+        {label:'SpO₂', data:spData, borderColor:'#1e88e5', borderWidth:2,
+         fill:true, backgroundColor:'rgba(30,136,229,0.07)', pointRadius:0, tension:0.4},
+        {label:'Baseline', data:Array(97).fill(97.8), borderColor:'rgba(0,200,255,0.4)',
+         borderWidth:1.5, borderDash:[6,4], pointRadius:0, fill:false}
+      ]
+    },
+    options: chartOpts('%',[94,100])
+  });
+
+  destroyChart('bo-rr-chart');
+  state.charts['bo-rr-chart'] = new Chart(document.getElementById('bo-rr-chart'), {
+    type:'line',
+    data:{
+      labels: timeLabels(60),
+      datasets:[{
+        label:'RR', data:genHR(60,14,3), borderColor:'#00c8ff', borderWidth:2,
+        fill:true, backgroundColor:'rgba(0,200,255,0.06)', pointRadius:0, tension:0.4
+      }]
+    },
+    options: chartOpts('br/min',[8,24])
+  });
+}
+
+function initCognitiveCharts() {
+  destroyChart('cog-trend');
+  const days = missionDayLabels(20).filter((_,i)=>i%7===0 || i===19);
+  state.charts['cog-trend'] = new Chart(document.getElementById('cog-trend'), {
+    type:'line',
+    data:{
+      labels: ['Pre','D7','D14','D30','D60','D90','D120','D147'],
+      datasets:[
+        {label:'Composite Score', data:[95,94,94,93,92,92,91,92.5],
+         borderColor:'#9c88d9', borderWidth:2, fill:true,
+         backgroundColor:'rgba(156,136,217,0.07)', pointRadius:4,
+         pointBackgroundColor:'#9c88d9', tension:0.4},
+        {label:'Baseline', data:Array(8).fill(95), borderColor:'rgba(156,136,217,0.4)',
+         borderWidth:1.5, borderDash:[6,4], pointRadius:0, fill:false}
+      ]
+    },
+    options: chartOpts('%',[80,100])
+  });
+}
+
+function initUltrasoundCanvases() {
+  ['ultra-prev','ultra-curr'].forEach((id, idx) => {
+    const cv = document.getElementById(id);
+    if (!cv) return;
+    const ctx = cv.getContext('2d');
+    cv.width = cv.offsetWidth || 300;
+    cv.height = cv.offsetHeight || 200;
+    const W = cv.width, H = cv.height;
+
+    ctx.fillStyle = '#010d18';
+    ctx.fillRect(0,0,W,H);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(0,200,255,0.06)';
+    for (let x=0;x<W;x+=20){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for (let y=0;y<H;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+    // Vein shape
+    const veinY = H*0.45, veinR = idx===0 ? 22 : 26;
+    const grd = ctx.createRadialGradient(W*0.5, veinY, 4, W*0.5, veinY, veinR);
+    grd.addColorStop(0,'rgba(30,120,220,0.9)');
+    grd.addColorStop(0.6,'rgba(10,60,160,0.7)');
+    grd.addColorStop(1,'rgba(0,20,80,0.2)');
+    ctx.beginPath();
+    ctx.ellipse(W*0.5, veinY, veinR*1.6, veinR, 0, 0, Math.PI*2);
+    ctx.fillStyle = grd; ctx.fill();
+
+    // Surrounding tissue
+    for (let i=0;i<8;i++) {
+      const tx=(Math.random()*0.8+0.1)*W, ty=(Math.random()*0.8+0.1)*H;
+      const tr=Math.random()*12+4;
+      const tg=ctx.createRadialGradient(tx,ty,0,tx,ty,tr);
+      tg.addColorStop(0,'rgba(40,80,120,0.3)');
+      tg.addColorStop(1,'rgba(0,20,60,0)');
+      ctx.beginPath(); ctx.arc(tx,ty,tr,0,Math.PI*2);
+      ctx.fillStyle=tg; ctx.fill();
+    }
+
+    // Label
+    if (idx===1) {
+      // Anomaly marker
+      ctx.strokeStyle='rgba(255,193,7,0.6)';
+      ctx.lineWidth=1.5;
+      ctx.setLineDash([4,3]);
+      ctx.beginPath();
+      ctx.ellipse(W*0.5+8, veinY-4, veinR*1.8+6, veinR+8, 0, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle='rgba(255,193,7,0.7)';
+      ctx.font='9px monospace';
+      ctx.fillText('MONITOR', W*0.5+veinR*1.8+8, veinY-2);
+    }
+
+    // Scale bar
+    ctx.strokeStyle='rgba(0,200,255,0.6)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(W-40,H-16); ctx.lineTo(W-20,H-16); ctx.stroke();
+    ctx.fillStyle='rgba(0,200,255,0.7)'; ctx.font='8px monospace';
+    ctx.fillText('5mm', W-48, H-6);
+  });
+}
+
+/* ==============================================================
+   BODY VISUALIZATION CANVAS
+   ============================================================== */
+(function() {
+  const canvas = document.getElementById('body-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = 200; canvas.height = 340;
+  const W=200, H=340;
+
+  let t=0;
+  function drawBody() {
+    requestAnimationFrame(drawBody);
+    t += 0.025;
+    ctx.clearRect(0,0,W,H);
+
+    // Body outline - simplified human
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = '#00c8ff';
+    ctx.lineWidth = 1.5;
+
+    // Head
+    ctx.beginPath();
+    ctx.arc(100, 40, 22, 0, Math.PI*2);
+    ctx.stroke();
+
+    // Neck
+    ctx.beginPath();
+    ctx.moveTo(92,62); ctx.lineTo(88,80);
+    ctx.moveTo(108,62); ctx.lineTo(112,80);
+    ctx.stroke();
+
+    // Torso
+    ctx.beginPath();
+    ctx.moveTo(88,80); ctx.lineTo(76,180);
+    ctx.lineTo(92,182); ctx.lineTo(100,240);
+    ctx.lineTo(108,182); ctx.lineTo(124,180);
+    ctx.lineTo(112,80); ctx.closePath();
+    ctx.stroke();
+
+    // Arms
+    ctx.beginPath();
+    ctx.moveTo(88,85); ctx.bezierCurveTo(68,100,62,140,66,170);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(112,85); ctx.bezierCurveTo(132,100,138,140,134,170);
+    ctx.stroke();
+
+    // Legs
+    ctx.beginPath();
+    ctx.moveTo(92,182); ctx.bezierCurveTo(88,220,86,260,88,320);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(108,182); ctx.bezierCurveTo(112,220,114,260,112,320);
+    ctx.stroke();
+    ctx.restore();
+
+    // Heart pulse
+    const hpulse = 0.5 + 0.5*Math.sin(t*2.4);
+    ctx.save();
+    ctx.globalAlpha = 0.3 + 0.4*hpulse;
+    ctx.fillStyle = '#ff4060';
+    const hr = 10 + 4*hpulse;
+    ctx.beginPath();
+    ctx.arc(100, 110, hr, 0, Math.PI*2);
+    ctx.fill();
+    ctx.globalAlpha = 0.15 + 0.2*hpulse;
+    ctx.beginPath();
+    ctx.arc(100, 110, hr+8, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    // Brain glow
+    ctx.save();
+    ctx.globalAlpha = 0.15 + 0.08*Math.sin(t*0.8);
+    const bg2 = ctx.createRadialGradient(100,40,2,100,40,24);
+    bg2.addColorStop(0,'rgba(156,136,217,0.8)');
+    bg2.addColorStop(1,'rgba(100,80,180,0)');
+    ctx.fillStyle = bg2;
+    ctx.beginPath(); ctx.arc(100,40,24,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+
+    // Lungs
+    ctx.save();
+    ctx.globalAlpha = 0.12 + 0.06*Math.sin(t*1.2);
+    [[86,130],[114,130]].forEach(([lx,ly]) => {
+      const lg = ctx.createRadialGradient(lx,ly,2,lx,ly,16);
+      lg.addColorStop(0,'rgba(30,136,229,0.7)');
+      lg.addColorStop(1,'rgba(0,80,180,0)');
+      ctx.fillStyle=lg;
+      ctx.beginPath(); ctx.ellipse(lx,ly,14,18,0,0,Math.PI*2); ctx.fill();
+    });
+    ctx.restore();
+
+    // System labels
+    ctx.save();
+    ctx.font = '8px monospace';
+    ctx.fillStyle = 'rgba(0,200,255,0.55)';
+    ctx.fillText(' CARDIO', 112, 115);
+    ctx.fillText('O₂ PULM', 112, 132);
+    ctx.fillStyle = 'rgba(156,136,217,0.55)';
+    ctx.fillText('COG COG', 50, 44);
+    ctx.restore();
+  }
+  drawBody();
+})();
+
+/* ==============================================================
+   CHART HELPERS
+   ============================================================== */
+function chartOpts(unit, yRange) {
+  return {
+    responsive: true,
+    maintainAspectRatio: true,
+    animation: { duration: 400 },
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label(ctx) { return ` ${ctx.dataset.label}: ${ctx.parsed.y} ${unit}`; }
+        }
+      }
+    },
+    scales: {
+      x: {
+        grid: { color: 'rgba(0,200,255,0.06)' },
+        ticks: { maxTicksLimit: 8, font:{size:10} }
+      },
+      y: {
+        min: yRange ? yRange[0] : undefined,
+        max: yRange ? yRange[1] : undefined,
+        grid: { color: 'rgba(0,200,255,0.06)' },
+        ticks: { font:{size:10} }
+      }
+    }
+  };
+}
+
+function destroyChart(id) {
+  if (state.charts[id]) {
+    state.charts[id].destroy();
+    delete state.charts[id];
+  }
+}
+
+function initPageCharts(page) {
+  if (page === 'overview') {
+    initOverviewCharts();
+    initSparklines();
+  } else if (page === 'cardiovascular') {
+    initCardiovascularCharts();
+  } else if (page === 'blood-oxygen') {
+    initBloodOxygenCharts();
+  } else if (page === 'cognitive') {
+    initCognitiveCharts();
+  } else if (page === 'ultrasound') {
+    initUltrasoundCanvases();
+  }
+}
+
+/* ==============================================================
+   LIVE DATA UPDATES
+   ============================================================== */
+let liveHR = 78, liveSPO2 = 97.2;
+
+function updateLiveValues() {
+  liveHR   += (Math.random()-0.5)*1.8;
+  liveSPO2 += (Math.random()-0.5)*0.15;
+  liveHR    = Math.max(60, Math.min(104, liveHR));
+  liveSPO2  = Math.max(95.5, Math.min(99.5, liveSPO2));
+
+  const hrStr   = liveHR.toFixed(0);
+  const spo2Str = liveSPO2.toFixed(1);
+  const dev     = (liveHR - 72).toFixed(0);
+
+  ['hr-display','sc-hr','cv-hr-val'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && id === 'hr-display') el.textContent = hrStr;
+    if (el && id === 'sc-hr') el.innerHTML = hrStr + ' <span class="sc-unit">BPM</span>';
+    if (el && id === 'cv-hr-val') el.innerHTML = hrStr + ' <span class="sc-unit">BPM</span>';
+  });
+  const ecgHr = document.getElementById('ecg-hr');
+  if (ecgHr) ecgHr.textContent = hrStr;
+
+  ['spo2-display'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = spo2Str;
+  });
+  const sco2 = document.getElementById('sc-spo2');
+  if (sco2) sco2.innerHTML = spo2Str + ' <span class="sc-unit">%</span>';
+
+  // HR baseline bar
+  const hrBlVal = document.getElementById('hr-bl-val');
+  const hrBlDev = document.getElementById('hr-bl-dev');
+  if (hrBlVal) hrBlVal.textContent = hrStr + ' BPM';
+  if (hrBlDev) hrBlDev.textContent = (dev>=0?'+':'')+dev+' BPM';
+
+  // Update HR chart live
+  if (state.charts['hr-chart']) {
+    const ds = state.charts['hr-chart'].data.datasets[0];
+    ds.data.push(+liveHR.toFixed(1));
+    if (ds.data.length > 80) ds.data.shift();
+    state.charts['hr-chart'].data.labels.push('');
+    if (state.charts['hr-chart'].data.labels.length > 80) state.charts['hr-chart'].data.labels.shift();
+    state.charts['hr-chart'].update('none');
+  }
+}
+
+setInterval(updateLiveValues, 1400);
+
+/* ==============================================================
+   TIME RANGE BUTTONS
+   ============================================================== */
+function setTimeRange(chart, range, btn) {
+  const parent = btn.closest('.time-range-btns');
+  if (parent) parent.querySelectorAll('.trb').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  // Re-generate data based on range
+  // (simplified — would fetch real historical data in production)
+}
+
+/* ==============================================================
+   TIMELINE DETAIL
+   ============================================================== */
+function showTimelineDetail(day) {
+  const details = {
+    preflight:'Pre-flight baseline: All parameters within normal ranges. Cognitive 95%, HR 72 BPM, SpO₂ 97.8%',
+    launch:    'Launch Day 0: Vital signs nominal. Post-launch adaptation begins.',
+    d30:       'Day 30: Early fluid shift effects. HR slightly elevated. SpO₂ stable.',
+    d60:       'Day 60: First ultrasound — IJV within range. Cognitive stable at 93%.',
+    d90:       'Day 90: Full cardiovascular review. HRV slightly reduced vs baseline.',
+    d120:      'Day 120: Cognitive assessment — all domains within expected range.',
+    d144:      'Day 144: SIM ECG pattern change detected. AI flagged for review. PVC burden 2%.',
+    current:   'Day 147: Current monitoring. HR above baseline. Medical review for ECG pending.'
+  };
+  const t = document.getElementById('tooltip');
+  if (!t) return;
+  t.textContent = details[day] || day;
+  t.style.display = 'block';
+  t.style.left = '50%'; t.style.top = '40%';
+  setTimeout(() => t.style.display = 'none', 3500);
+}
+
+/* ==============================================================
+   INIT ON LOAD
+   ============================================================== */
+document.addEventListener('DOMContentLoaded', () => {
+  initOverviewCharts();
+  initSparklines();
+});
+</script>
+</body>
+</html>
