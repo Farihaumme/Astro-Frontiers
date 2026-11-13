@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.env
+.env.*
+
+# Models and large files
+*.pt
+*.pth
+*.keras
+*.h5
+
+# NASA downloaded datasets
+backend/nasa_data/
+
+# Node
+node_modules/
+dist/
+build/
+
+# IDE
+.vscode/
