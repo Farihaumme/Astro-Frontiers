@@ -29,17 +29,12 @@ RUN uv venv --python 3.10 /opt/ecg-venv
 COPY backend/requirements.txt /app/backend/requirements.txt
 COPY backend/requirements-ecg.txt /app/backend/requirements-ecg.txt
 
-# Install main backend dependencies
-RUN uv pip install --python /opt/ecg-venv/bin/python \
-    -r /app/backend/requirements-ecg.txt
-# Install ECG-FM dependencies
-# Install PyTorch CPU version
-RUN uv pip install --python /opt/ecg-venv/bin/python \
-    --index-url https://download.pytorch.org/whl/cpu \
-    torch==2.14.0
+# Install main backend dependencies (Python 3.11)
+RUN /opt/main-venv/bin/pip install --no-cache-dir \
+    -r /app/backend/requirements.txt
 
-# Install remaining ECG-FM dependencies
-RUN /opt/ecg-venv/bin/pip install --no-cache-dir \
+# Install ECG-FM dependencies (Python 3.10)
+RUN uv pip install --python /opt/ecg-venv/bin/python \
     -r /app/backend/requirements-ecg.txt
 
 # Copy application files
