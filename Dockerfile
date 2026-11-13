@@ -30,7 +30,10 @@ COPY backend/requirements.txt /app/backend/requirements.txt
 COPY backend/requirements-ecg.txt /app/backend/requirements-ecg.txt
 
 # Install main backend dependencies (Python 3.11)
-RUN /opt/main-venv/bin/pip install --no-cache-dir \
+RUN /opt/main-venv/bin/pip install \
+    --no-cache-dir \
+    --timeout 300 \
+    --retries 10 \
     -r /app/backend/requirements.txt
 
 # Install ECG-FM dependencies (Python 3.10)
