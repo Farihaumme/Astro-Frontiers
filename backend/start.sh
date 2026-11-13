@@ -86,10 +86,3 @@ wait "$ECG_PID" "$MAIN_PID" 2>/dev/null || true
 
 exit "$STATUS"
 
-echo "One of the services stopped. Shutting down both..."
-
-kill "$ECG_PID" "$MAIN_PID" 2>/dev/null || true
-
-wait "$ECG_PID" "$MAIN_PID" 2>/dev/null || true
-
-exit "$STATUS"

@@ -33,6 +33,12 @@ RUN /opt/main-venv/bin/pip install --no-cache-dir \
     -r /app/backend/requirements.txt
 
 # Install ECG-FM dependencies
+# Install PyTorch CPU version
+RUN /opt/ecg-venv/bin/pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch==2.14.0
+
+# Install remaining ECG-FM dependencies
 RUN /opt/ecg-venv/bin/pip install --no-cache-dir \
     -r /app/backend/requirements-ecg.txt
 
