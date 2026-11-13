@@ -16,6 +16,11 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV UV_LINK_MODE=copy
 
+# Use official PyPI for pip installations
+ENV PIP_INDEX_URL=https://pypi.org/simple
+ENV PIP_DEFAULT_TIMEOUT=300
+ENV PIP_RETRIES=10
+
 WORKDIR /app
 
 # Install Python 3.10 for ECG-FM
@@ -29,15 +34,22 @@ RUN uv venv --python 3.10 /opt/ecg-venv
 COPY backend/requirements.txt /app/backend/requirements.txt
 COPY backend/requirements-ecg.txt /app/backend/requirements-ecg.txt
 
+# Upgrade pip in the main environment
+RUN /opt/main-venv/bin/python -m pip install \
+    --no-cache-dir \
+    --upgrade pip
+
 # Install main backend dependencies (Python 3.11)
 RUN /opt/main-venv/bin/pip install \
     --no-cache-dir \
     --timeout 300 \
     --retries 10 \
+    --index-url https://pypi.org/simple \
     -r /app/backend/requirements.txt
 
 # Install ECG-FM dependencies (Python 3.10)
-RUN uv pip install --python /opt/ecg-venv/bin/python \
+RUN uv pip install \
+    --python /opt/ecg-venv/bin/python \
     -r /app/backend/requirements-ecg.txt
 
 # Copy application files
